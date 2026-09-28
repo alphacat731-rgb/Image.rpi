@@ -5,8 +5,9 @@ from pathlib import Path
 import queue
 import select
 import threading
+import time
 
-from .config import AppConfig, Quality
+from .config import AppConfig, DisplayMode, Palette, Quality
 from .loader import ImageLoader, LoadEvent, LoadedImage, list_images
 from .renderer import Renderer
 from .terminal import terminal_session, terminal_size
@@ -24,6 +25,8 @@ class ImageApp:
         self.renderer = Renderer(self.config)
         self.loader = ImageLoader(self.config)
         self.quality = self.config.default_quality
+        self.display_mode = DisplayMode.HALF_BLOCK
+        self.palette = Palette.LIGHT
         self.current: LoadedImage | None = None
 
         raw_path = Path(initial).expanduser().resolve() if initial else Path.cwd()
@@ -48,29 +51,68 @@ class ImageApp:
         self.loading = False
         self.running = True
         self._progress = LoadEvent("open", 0.0, "Loading...")
+        self._last_signature: tuple | None = None
+        self._last_render_time = 0.0
+
+        self.config.apply_palette(self.palette)
 
     def run(self) -> None:
         with terminal_session() as term:
-            if self.entries and self.current is None:
-                self._start_load(self.entries[self.index])
-            else:
-                term.write(
-                    self.renderer.frame(
-                        None,
-                        self.quality,
-                        "Press O to browse",
-                    )
-                )
+            force = True
 
             while self.running:
                 self._drain_load()
-                term.write(self._render())
+                signature = self._render_signature()
+
+                now = time.monotonic()
+                render_allowed = (
+                    not self.loading
+                    or now - self._last_render_time >= 1.0 / 12.0
+                    or self._progress.progress >= 1.0
+                )
+
+                if force or (
+                    signature != self._last_signature and render_allowed
+                ):
+                    term.write(self._render())
+                    self._last_signature = signature
+                    self._last_render_time = now
+                    force = False
+
                 key = self._read_key_with_timeout(
                     term,
                     1.0 / self.config.render_fps,
                 )
                 if key:
                     self._handle_key(key)
+                    force = True
+
+    def _render_signature(self) -> tuple:
+        current_path = str(self.current.path) if self.current else None
+        entries_count = len(self.entries)
+        current_terminal = terminal_size()
+        progress = (
+            self._progress.stage,
+            round(self._progress.progress, 3),
+            self._progress.message,
+        ) if self.loading else None
+
+        return (
+            self.loading,
+            progress,
+            current_path,
+            entries_count,
+            self.index,
+            self.browser,
+            self.help_overlay,
+            self.info_overlay,
+            self.status,
+            self.quality,
+            self.display_mode,
+            self.palette,
+            current_terminal.columns,
+            current_terminal.lines,
+        )
 
     def _render(self) -> str:
         if self.loading:
@@ -84,6 +126,7 @@ class ImageApp:
             self.current,
             self.quality,
             self.status,
+            display_mode=self.display_mode,
             browser=self.browser,
             browser_entries=self.entries,
             browser_index=self.index,
@@ -168,8 +211,20 @@ class ImageApp:
             self.help_overlay = False
             return
 
+        if key in {"a", "A"} and not self.loading:
+            self.display_mode = DisplayMode.next(self.display_mode)
+            self.status = f"Display mode: {self.display_mode.label}"
+            return
+
+        if key in {"p", "P"} and not self.loading:
+            self.palette = Palette.next(self.palette)
+            self.config.apply_palette(self.palette)
+            self.status = f"Palette: {self.palette.label}"
+            return
+
         if key in {"r", "R"} and not self.loading:
             self.quality = Quality.next(self.quality)
+            self.status = f"Quality: {self.quality.label}"
             if self.current is not None:
                 self._start_load(self.current.path)
             return
