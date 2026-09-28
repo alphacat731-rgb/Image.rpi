@@ -4,6 +4,8 @@
   "quality": "ULTRA",
   "language": "en",
   "color_depth": "auto",
+  // Use "ansi16", "ansi256", "truecolor", or "auto".
+
   "recursive_scan": true,
   "touch_controls": true,
   "terminal_font": "",
