@@ -63,8 +63,36 @@ class CoreTests(unittest.TestCase):
         config = AppConfig()
         config.color_depth = ColorDepth.ANSI256
         renderer = Renderer(config)
-        self.assertEqual(renderer.main_menu_hit(40, 10, 80, 24), 0)
+        self.assertEqual(renderer.main_menu_hit(40, 7, 80, 24), 0)
         self.assertEqual(renderer.viewer_hit(20, 20, 80, 24), None)
+
+    def test_touch_hit_regions_follow_visible_rows(self) -> None:
+        from imagerpi.config import ColorDepth
+        from imagerpi.renderer import Renderer
+
+        config = AppConfig()
+        config.color_depth = ColorDepth.ANSI256
+        renderer = Renderer(config)
+
+        self.assertEqual(renderer.options_menu_hit(40, 4, 80, 24, 0), 0)
+        self.assertEqual(renderer.options_menu_hit(40, 5, 80, 24, 0), 1)
+        self.assertEqual(renderer.browser_hit(40, 5, 80, 24, 5, 0), 0)
+        self.assertEqual(renderer.browser_hit(40, 22, 80, 24, 5, 0), -1)
+
+    def test_list_images_recursive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nested = root / "nested"
+            nested.mkdir()
+            (root / "root.png").write_bytes(b"placeholder")
+            (nested / "nested.jpg").write_bytes(b"placeholder")
+            found = list_images(root, recursive=True)
+            self.assertEqual(
+                [p.name for p in found],
+                ["nested.jpg", "root.png"],
+            )
+            shallow = list_images(root, recursive=False)
+            self.assertEqual([p.name for p in shallow], ["root.png"])
 
     def test_list_images_filters_extensions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
