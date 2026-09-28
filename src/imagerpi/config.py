@@ -171,6 +171,17 @@ def _config_path() -> Path:
 def load_user_config() -> dict:
     import json
     path = _config_path()
+
+    if not path.exists():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(DEFAULT_USER_CONFIG, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else dict(DEFAULT_USER_CONFIG)
