@@ -1,6 +1,6 @@
 # IMAGE.RPI
 
-A terminal-native image viewer for small Linux systems, especially Raspberry Pi 3B-class hardware running Debian 13 "Trixie" in a terminal-only environment.
+A terminal-native image viewer for small Linux systems, especially Raspberry Pi 3B-class hardware running Debian 13 "Trixie" in a terminal-only environment, with a fullscreen app-style UI and high-density Unicode rendering.
 
 ## Features
 
@@ -11,12 +11,16 @@ A terminal-native image viewer for small Linux systems, especially Raspberry Pi 
 - Six quality presets: Very Low, Low, Medium, High, Very High, Ultra.
 - 24 built-in interface color presets with editable RGB overrides.
 - Background image loading with progress UI for large files.
-- Keyboard-driven image browser and previous/next navigation.
+- Fullscreen app-style main menu and responsive Options screen.
+- Keyboard and touchscreen-driven image browser with previous/next navigation.
+- Zoom from 1× to 8× and touch-friendly viewer toolbar.
 - Image information and help overlays.
 - EXIF orientation handling.
 - Transparent images composited over white.
 - JPEG, PNG, WebP, BMP, GIF, TIFF and common Netpbm formats via Pillow.
 - Conservative decoded-pixel safety limit for Raspberry Pi memory constraints.
+- 24 interface color presets with editable RGB overrides.
+- Truecolor/ANSI256 selection and a palette preview in Options.
 - No GTK, Qt, X11 or Wayland dependency.
 
 ## Install on Debian Trixie
