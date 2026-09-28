@@ -266,7 +266,6 @@ class Renderer:
 
         wide = cols >= 86 and rows >= 18
         top = 4
-        bottom = max(top, rows - 3)
 
         if wide:
             list_w = min(48, max(42, cols // 2))
@@ -280,6 +279,10 @@ class Renderer:
             preview_left = left
             preview_w = list_w
 
+        # Medium terminals stack the preview below the list; tiny terminals
+        # skip it entirely to keep the controls readable.
+        reserve_preview = 6 if (not wide and rows >= 16) else 0
+        bottom = max(top, rows - 3 - reserve_preview)
         visible_rows = max(1, bottom - top + 1)
         max_items = min(len(items), visible_rows)
         window_start = max(
@@ -343,65 +346,85 @@ class Renderer:
             )
 
         # Dedicated preview card. It shows the selected theme and actual color depth.
-        preview_top = 4
-        preview_h = max(10, min(rows - 7, 16))
-        out.write(
-            move(preview_top, preview_left)
-            + self._style(self.config.border, self.config.panel)
-            + "╭" + "─" * (preview_w - 2) + "╮"
-        )
-        preview_title = tr(language, "palette_preview")
-        out.write(
-            move(preview_top + 1, preview_left)
-            + self._style(self.config.foreground, self.config.panel, bold=True)
-            + "│"
-            + preview_title.center(preview_w - 2)
-            + "│"
-        )
-        palette_line = f"  {palette.label}  "
-        out.write(
-            move(preview_top + 2, preview_left)
-            + self._style(self.config.accent, self.config.panel, bold=True)
-            + "│"
-            + palette_line.center(preview_w - 2)
-            + "│"
-        )
+        if wide:
+            preview_top = 4
+        else:
+            preview_top = top + max_items + 1
 
-        self._palette_demo(out, preview_top + 4, preview_left + 2, preview_w - 4)
-
-        color_count = tr(
-            language,
-            "image_colors",
-            count=self._color_count_short(),
+        draw_preview = wide or (
+            reserve_preview > 0
+            and preview_top + 4 < rows - 1
         )
-        lines = [
-            color_count,
-            f"{tr(language, 'color_depth')}: {self._color_depth_short(language)}",
-            f"{tr(language, 'display_mode')}: {display_mode.label}",
-            f"{tr(language, 'font')}: {terminal_font or 'Default'}",
-        ]
-        for i, line in enumerate(lines):
-            if preview_top + 7 + i >= preview_top + preview_h - 1:
-                break
+        preview_h = max(10, min(rows - 7, 16)) if draw_preview else 0
+        bottom_row = 0
+        if draw_preview:
             out.write(
-                move(preview_top + 7 + i, preview_left + 2)
-                + self._style(self.config.muted, self.config.panel)
-                + line[: preview_w - 4]
-            )
-
-        bottom_row = preview_top + preview_h
-        if bottom_row < rows:
-            out.write(
-                move(bottom_row, preview_left)
+                move(preview_top, preview_left)
                 + self._style(self.config.border, self.config.panel)
-                + "╰" + "─" * (preview_w - 2) + "╯"
+                + "╭" + "─" * (preview_w - 2) + "╮"
             )
+            preview_title = tr(language, "palette_preview")
+            out.write(
+                move(preview_top + 1, preview_left)
+                + self._style(self.config.foreground, self.config.panel, bold=True)
+                + "│"
+                + preview_title.center(preview_w - 2)
+                + "│"
+            )
+            palette_line = f"  {palette.label}  "
+            out.write(
+                move(preview_top + 2, preview_left)
+                + self._style(self.config.accent, self.config.panel, bold=True)
+                + "│"
+                + palette_line.center(preview_w - 2)
+                + "│"
+            )
+
+            self._palette_demo(
+                out,
+                preview_top + 4,
+                preview_left + 2,
+                preview_w - 4,
+            )
+
+            color_count = tr(
+                language,
+                "image_colors",
+                count=self._color_count_short(),
+            )
+            lines = [
+                color_count,
+                f"{tr(language, 'color_depth')}: {self._color_depth_short(language)}",
+                f"{tr(language, 'display_mode')}: {display_mode.label}",
+                f"{tr(language, 'font')}: {terminal_font or 'Default'}",
+            ]
+            for i, line in enumerate(lines):
+                if preview_top + 7 + i >= preview_top + preview_h - 1:
+                    break
+                out.write(
+                    move(preview_top + 7 + i, preview_left + 2)
+                    + self._style(self.config.muted, self.config.panel)
+                    + line[: preview_w - 4]
+                )
+
+            bottom_row = preview_top + preview_h
+            if bottom_row < rows:
+                out.write(
+                    move(bottom_row, preview_left)
+                    + self._style(self.config.border, self.config.panel)
+                    + "╰" + "─" * (preview_w - 2) + "╯"
+                )
 
         term_text = tr(language, "terminal", cols=cols, rows=rows)
         count_text = tr(language, "image_count", count=image_count)
         meta = f"{term_text}   •   {count_text}"
-        meta_y = min(rows - 2, max(top + max_items + 1, bottom_row + 1))
-        out.write(
+        meta_y = min(
+            rows - 2,
+            max(
+                top + max_items + 1,
+                bottom_row + 1 if draw_preview else top + max_items + 1,
+            ),
+        )        out.write(
             move(meta_y, max(1, center - len(meta) // 2))
             + self._style(self.config.muted, self.config.background)
             + meta[: max(1, cols - 2)]
@@ -1266,6 +1289,8 @@ class Renderer:
 
         top = 4
         bottom = max(top, rows - 3)
+        reserve_preview = 6 if (not wide and rows >= 16) else 0
+        bottom = max(top, rows - 3 - reserve_preview)
         visible_rows = max(1, bottom - top + 1)
         max_items = min(item_count, visible_rows)
         window_start = max(
