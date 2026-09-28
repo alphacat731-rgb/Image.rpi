@@ -21,6 +21,7 @@
 - Overlay Esc now closes the overlay before leaving the viewer.
 - Browser Home/End navigation is wired up.
 - Recursive library-scan progress is kept monotonic.
+- Zoom and pan are preserved when the current image is reloaded for a terminal resize or quality change.
 - Palette preview gradients are constrained to their panel width.
 - ANSI16 conversion is included for terminals without ANSI256/Truecolor support.
 
