@@ -14,6 +14,8 @@ HIDE_CURSOR = ESC + "?25l"
 SHOW_CURSOR = ESC + "?25h"
 ALT_SCREEN_ON = ESC + "?1049h"
 ALT_SCREEN_OFF = ESC + "?1049l"
+MOUSE_ON = ESC + "?1000h" + ESC + "?1006h"
+MOUSE_OFF = ESC + "?1000l" + ESC + "?1006l"
 CLEAR = ESC + "2J" + ESC + "H"
 ERASE_LINE = ESC + "2K"
 
@@ -102,12 +104,12 @@ class RawTerminal:
         self._old = termios.tcgetattr(self.fd)
         tty.setcbreak(self.fd)
         self.enabled = True
-        sys.stdout.write(ALT_SCREEN_ON + HIDE_CURSOR + CLEAR + RESET)
+        sys.stdout.write(ALT_SCREEN_ON + HIDE_CURSOR + MOUSE_ON + CLEAR + RESET)
         sys.stdout.flush()
 
     def leave(self) -> None:
         if self.enabled:
-            sys.stdout.write(RESET + SHOW_CURSOR + ALT_SCREEN_OFF)
+            sys.stdout.write(RESET + MOUSE_OFF + SHOW_CURSOR + ALT_SCREEN_OFF)
             sys.stdout.flush()
             if self._old is not None:
                 termios.tcsetattr(self.fd, termios.TCSADRAIN, self._old)
@@ -125,6 +127,15 @@ class RawTerminal:
         import select
         while select.select([self.fd], [], [], 0.01)[0]:
             seq += os.read(self.fd, 1).decode("utf-8", "ignore")
+
+        if seq.startswith("\x1b[<") and seq.endswith(("M", "m")):
+            payload = seq[3:-1]
+            try:
+                button, x, y = (int(part) for part in payload.split(";"))
+                action = "PRESS" if seq.endswith("M") else "RELEASE"
+                return f"MOUSE:{action}:{button}:{x}:{y}"
+            except (TypeError, ValueError):
+                pass
 
         return {
             "\x1b[A": "UP",
