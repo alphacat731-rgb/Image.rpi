@@ -48,6 +48,19 @@ class CoreTests(unittest.TestCase):
             )
         )
 
+    def test_quality_changes_effective_terminal_resolution(self) -> None:
+        from imagerpi.renderer import Renderer
+
+        renderer = Renderer(AppConfig())
+        self.assertEqual(
+            renderer._quality_scale(Quality.VERY_LOW),
+            0.25,
+        )
+        self.assertEqual(
+            renderer._quality_scale(Quality.ULTRA),
+            1.0,
+        )
+
     def test_high_resolution_source_supports_zoom(self) -> None:
         loader = ImageLoader(AppConfig())
         source = loader._target_pixels((1920, 1080), Quality.ULTRA, (100, 30))
