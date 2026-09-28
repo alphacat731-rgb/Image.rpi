@@ -1010,24 +1010,35 @@ class Renderer:
         )
 
     @staticmethod
-    def _main_menu_geometry(cols: int, rows: int) -> tuple[int, int, int, int, int, int]:
+    def _main_menu_geometry(
+        cols: int,
+        rows: int,
+    ) -> tuple[int, int, int, int, int, int]:
         center = max(1, cols // 2)
-        compact = rows < 18
-        title_row = 1 if compact else max(3, rows // 2 - 9)
+        compact = rows < 22
+
+        title_row = 1 if compact else 2
         button_w = min(56, max(30, cols - 10))
         button_h = 2 if compact else 3
         gap = 0 if compact else 1
-        first_row = 4 if compact else max(title_row + 5, rows // 2 - 4)
-
         total_height = 3 * button_h + 2 * gap
-        max_first = max(first_row, rows - 3 - total_height)
+
+        if compact:
+            first_row = 4
+        else:
+            first_row = max(
+                title_row + 4,
+                (rows - total_height) // 2,
+            )
+
+        max_first = max(title_row + 4, rows - 3 - total_height)
         first_row = min(first_row, max_first)
         left = max(2, center - button_w // 2)
         return left, title_row, first_row, button_w, button_h, gap
 
     @staticmethod
     def main_menu_hit(x: int, y: int, cols: int, rows: int) -> int | None:
-        left, first_row, button_w, button_h, gap = Renderer._main_menu_geometry(cols, rows)
+        left, _, first_row, button_w, button_h, gap = Renderer._main_menu_geometry(cols, rows)
         if not (left <= x <= left + button_w):
             return None
         for i in range(3):
