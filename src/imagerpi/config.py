@@ -381,7 +381,11 @@ def save_user_config(
             "recursive_scan": recursive_scan,
             "touch_controls": touch_controls,
             "terminal_font": terminal_font,
-            "palettes": palette_overrides or current.get("palettes", {}),
+            "palettes": (
+                palette_overrides
+                if palette_overrides is not None
+                else current.get("palettes", {})
+            ),
         }
     )
     try:
