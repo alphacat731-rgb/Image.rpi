@@ -48,7 +48,7 @@ class DisplayMode(str, Enum):
     def label(self) -> str:
         return {
             DisplayMode.HALF_BLOCK: "Half Block (▀)",
-            DisplayMode.FULL_BLOCK: "Full Block (█)",
+            DisplayMode.FULL_BLOCK: "Rectangles (█)",
             DisplayMode.LOWER_BLOCK: "Lower Block (▄)",
             DisplayMode.LEFT_BLOCK: "Left Block (▌)",
             DisplayMode.RIGHT_BLOCK: "Right Block (▐)",
