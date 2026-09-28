@@ -159,6 +159,7 @@ class ImageApp:
             recursive_scan=self.recursive_scan,
             touch_controls=self.touch_controls,
             terminal_font=self.config.terminal_font,
+            palette_overrides=overrides,
         )
 
     def _start_scan(self) -> None:
