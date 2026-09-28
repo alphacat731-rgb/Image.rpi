@@ -16,12 +16,16 @@
 - Browser now has a real touchscreen Back button.
 - Main-menu compact geometry no longer collides with the footer.
 - Options preview can no longer overlap the settings list on small terminals.
+- Options metadata no longer collides with the preview in medium terminals.
+- Small-terminal main menu cards stay clear of the footer.
 - Application background is applied before clearing, keeping blank cells consistent with the selected palette.
 - Touch hitboxes no longer include the first cell outside their visible cards.
 - Overlay Esc now closes the overlay before leaving the viewer.
 - Browser Home/End navigation is wired up.
 - Recursive library-scan progress is kept monotonic.
 - Zoom and pan are preserved when the current image is reloaded for a terminal resize or quality change.
+- Scaled viewer images are cached so zoom/pan movement avoids repeating expensive resizes.
+- The viewer cache is deliberately bounded for Raspberry Pi memory usage.
 - Palette preview gradients are constrained to their panel width.
 - ANSI16 conversion is included for terminals without ANSI256/Truecolor support.
 
