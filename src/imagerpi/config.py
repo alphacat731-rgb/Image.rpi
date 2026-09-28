@@ -30,6 +30,39 @@ class Quality(IntEnum):
         return values[(values.index(current) + 1) % len(values)]
 
 
+class Language(str, Enum):
+    ENGLISH = "en"
+    SPANISH = "es"
+
+    @property
+    def label(self) -> str:
+        return "English" if self is Language.ENGLISH else "Español"
+
+    @classmethod
+    def next(cls, current: "Language") -> "Language":
+        values = list(cls)
+        return values[(values.index(current) + 1) % len(values)]
+
+
+class ColorDepth(str, Enum):
+    AUTO = "auto"
+    TRUECOLOR = "truecolor"
+    ANSI256 = "ansi256"
+
+    @property
+    def label(self) -> str:
+        return {
+            ColorDepth.AUTO: "Auto",
+            ColorDepth.TRUECOLOR: "Truecolor",
+            ColorDepth.ANSI256: "256 colors",
+        }[self]
+
+    @classmethod
+    def next(cls, current: "ColorDepth") -> "ColorDepth":
+        values = list(cls)
+        return values[(values.index(current) + 1) % len(values)]
+
+
 class DisplayMode(str, Enum):
     HALF_BLOCK = "half"
     FULL_BLOCK = "full"
