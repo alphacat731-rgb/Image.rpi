@@ -546,6 +546,168 @@ class Renderer:
 
         return left, top
 
+    def main_menu(
+        self,
+        cols: int,
+        rows: int,
+        selected: int,
+    ) -> str:
+        out = StringIO()
+        out.write("\x1b[2J\x1b[H")
+        out.write(rgb_bg(self.config.background) + rgb_fg(self.config.foreground))
+
+        title = "IMAGE.RPI"
+        subtitle = "TERMINAL IMAGE VIEWER"
+        items = ["View Images", "Options", "Quit"]
+
+        title_row = max(3, rows // 2 - 7)
+        out.write(
+            move(title_row, max(1, (cols - len(title)) // 2))
+            + style(self.config.foreground, self.config.background, bold=True)
+            + title
+        )
+        out.write(
+            move(title_row + 1, max(1, (cols - len(subtitle)) // 2))
+            + style(self.config.muted, self.config.background)
+            + subtitle
+        )
+        out.write(
+            move(title_row + 3, max(1, (cols - 24) // 2))
+            + style(self.config.accent, self.config.background)
+            + "────────────────────────"
+        )
+
+        button_w = min(52, max(28, cols - 12))
+        button_h = 3
+        gap = 1
+        first_row = max(title_row + 5, rows // 2 - 3)
+        left = max(2, (cols - button_w) // 2)
+
+        for i, item in enumerate(items):
+            row = first_row + i * (button_h + gap)
+            selected_item = i == selected
+            bg = self.config.selection if selected_item else self.config.panel
+            fg = (255, 255, 255) if selected_item else self.config.foreground
+            border = self.config.selection if selected_item else self.config.border
+
+            for r in range(button_h):
+                out.write(
+                    move(row + r, left)
+                    + style(fg, bg)
+                    + " " * button_w
+                )
+
+            label = f"  {item}"
+            label += " " * max(0, button_w - len(label) - 2)
+            label += "  "
+            out.write(
+                move(row + 1, left)
+                + style(fg, bg, bold=selected_item)
+                + label[:button_w]
+            )
+
+            out.write(
+                move(row, left)
+                + style(border, bg)
+                + "┌" + "─" * (button_w - 2) + "┐"
+            )
+            out.write(
+                move(row + button_h - 1, left)
+                + style(border, bg)
+                + "└" + "─" * (button_w - 2) + "┘"
+            )
+
+        hint = "↑ ↓ Navigate    Enter Select    Q Quit"
+        out.write(
+            move(rows - 2, max(1, (cols - len(hint)) // 2))
+            + style(self.config.muted, self.config.background)
+            + hint
+        )
+        out.write(RESET)
+        return out.getvalue()
+
+    def options_menu(
+        self,
+        cols: int,
+        rows: int,
+        selected: int,
+        quality: Quality,
+        display_mode: DisplayMode,
+        palette,
+    ) -> str:
+        out = StringIO()
+        out.write("\x1b[2J\x1b[H")
+        out.write(rgb_bg(self.config.background) + rgb_fg(self.config.foreground))
+
+        title = "OPTIONS"
+        out.write(
+            move(max(3, rows // 2 - 8), max(1, (cols - len(title)) // 2))
+            + style(self.config.foreground, self.config.background, bold=True)
+            + title
+        )
+
+        items = [
+            ("Image Quality", quality.label),
+            ("Display Mode", display_mode.label),
+            ("Color Palette", palette.label),
+            ("Back", ""),
+        ]
+
+        panel_w = min(68, max(32, cols - 10))
+        first_row = max(6, rows // 2 - 4)
+        left = max(2, (cols - panel_w) // 2)
+
+        for i, (name, value) in enumerate(items):
+            row = first_row + i * 2
+            active = i == selected
+            bg = self.config.selection if active else self.config.panel
+            fg = (255, 255, 255) if active else self.config.foreground
+            label = name
+            if value:
+                label = f"{name:<20} {value}"
+            label = ("  " + label).ljust(panel_w)[:panel_w]
+
+            out.write(
+                move(row, left)
+                + style(fg, bg, bold=active)
+                + label
+            )
+            out.write(
+                move(row + 1, left)
+                + style(
+                    self.config.selection if active else self.config.border,
+                    self.config.background,
+                )
+                + ("─" * panel_w)
+            )
+
+        hint = "↑ ↓ Navigate    ← → / Enter Change    Esc Back"
+        out.write(
+            move(rows - 2, max(1, (cols - len(hint)) // 2))
+            + style(self.config.muted, self.config.background)
+            + hint
+        )
+        out.write(RESET)
+        return out.getvalue()
+
+    @staticmethod
+    def main_menu_hit(x: int, y: int, cols: int, rows: int) -> int | None:
+        title_row = max(3, rows // 2 - 7)
+        button_w = min(52, max(28, cols - 12))
+        button_h = 3
+        gap = 1
+        first_row = max(title_row + 5, rows // 2 - 3)
+        left = max(2, (cols - button_w) // 2)
+
+        if not (left <= x <= left + button_w):
+            return None
+
+        for i in range(3):
+            row = first_row + i * (button_h + gap)
+            if row <= y <= row + button_h - 1:
+                return i
+        return None
+
     def _help_overlay(self, out: StringIO, cols: int, rows: int) -> None:
         lines = [
             "IMAGE.RPI",
