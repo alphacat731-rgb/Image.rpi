@@ -1210,7 +1210,6 @@ class Renderer:
             self.config.selection,
         ]
         width = max(7, width)
-        swatch_w = max(1, width // len(colors))
         for i, color in enumerate(colors):
             x = left + (i * width) // len(colors)
             x2 = left + ((i + 1) * width) // len(colors)
