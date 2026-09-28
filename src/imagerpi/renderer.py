@@ -80,7 +80,7 @@ class Renderer:
         ]
 
         center = max(1, cols // 2)
-        title_row = max(3, rows // 2 - 9)
+        _, title_row, first_row, button_w, button_h, gap = self._main_menu_geometry(cols, rows)
 
         logo = f"◆ {title} ◆"
         out.write(
@@ -131,11 +131,12 @@ class Renderer:
                 ).ljust(button_w - 1)
                 + "│"
             )
-            out.write(
-                move(row + 2, left)
-                + self._style(border, bg)
-                + "╰" + "─" * (button_w - 2) + "╯"
-            )
+            if button_h == 3:
+                out.write(
+                    move(row + 2, left)
+                    + self._style(border, bg)
+                    + "╰" + "─" * (button_w - 2) + "╯"
+                )
 
         hint = f"↑ ↓ {tr(language, 'navigate')}    Enter {tr(language, 'select')}    Q {tr(language, 'quit')}"
         out.write(
@@ -1008,18 +1009,20 @@ class Renderer:
         )
 
     @staticmethod
-    def _main_menu_geometry(cols: int, rows: int) -> tuple[int, int, int, int, int]:
+    def _main_menu_geometry(cols: int, rows: int) -> tuple[int, int, int, int, int, int]:
         center = max(1, cols // 2)
-        title_row = max(2, rows // 2 - 8)
+        compact = rows < 18
+        title_row = 1 if compact else max(3, rows // 2 - 9)
         button_w = min(56, max(30, cols - 10))
-        button_h = 3 if rows >= 18 else 2
-        gap = 1 if rows >= 18 else 0
+        button_h = 2 if compact else 3
+        gap = 0 if compact else 1
+        first_row = 4 if compact else max(title_row + 5, rows // 2 - 4)
+
         total_height = 3 * button_h + 2 * gap
-        preferred_first = max(title_row + 5, rows // 2 - 4)
-        max_first = max(2, rows - 3 - total_height)
-        first_row = min(preferred_first, max_first)
+        max_first = max(first_row, rows - 3 - total_height)
+        first_row = min(first_row, max_first)
         left = max(2, center - button_w // 2)
-        return left, first_row, button_w, button_h, gap
+        return left, title_row, first_row, button_w, button_h, gap
 
     @staticmethod
     def main_menu_hit(x: int, y: int, cols: int, rows: int) -> int | None:
@@ -1041,26 +1044,25 @@ class Renderer:
         selected: int,
         item_count: int = 9,
     ) -> int | None:
-        title_row = max(2, rows // 2 - 11)
-        panel_w = min(76, max(38, cols - 8))
+        panel_w = min(78, max(38, cols - 8))
         left = max(2, cols // 2 - panel_w // 2)
-        first_row = max(title_row + 3, 4)
-        visible_height = max(5, rows - first_row - 5)
-        max_items = max(4, visible_height // 2)
-        window_start = max(0, min(selected - max_items // 2, max(0, item_count - max_items)))
+        first_row = 4
+        preview_height = 4
+        footer_height = 1
+        available = max(1, rows - first_row - preview_height - footer_height)
+        max_items = max(1, min(item_count, available))
+        window_start = max(
+            0,
+            min(selected - max_items // 2, max(0, item_count - max_items)),
+        )
 
         if not (left <= x <= left + panel_w):
             return None
-
-        display_i = (y - first_row) // 2
-        if display_i < 0 or display_i >= max_items:
+        if y < first_row or y >= first_row + max_items:
             return None
 
-        row = first_row + display_i * 2
-        if row <= y <= row + 1:
-            index = window_start + display_i
-            return index if index < item_count else None
-        return None
+        index = window_start + (y - first_row)
+        return index if index < item_count else None
 
     @staticmethod
     def browser_hit(
@@ -1081,7 +1083,13 @@ class Renderer:
         return index if 0 <= index < count else None
 
     @staticmethod
-    def viewer_hit(x: int, y: int, cols: int, rows: int) -> str | None:
+    def viewer_hit(
+        x: int,
+        y: int,
+        cols: int,
+        rows: int,
+        language: Language = Language.ENGLISH,
+    ) -> str | None:
         toolbar_row = rows - 4
         if y < toolbar_row + 1 or y > toolbar_row + 2:
             return None
@@ -1097,9 +1105,9 @@ class Renderer:
         else:
             labels = [
                 ("prev", "<"),
-                ("browse", "Browse"),
-                ("fit", "Fit"),
-                ("info", "Info"),
+                ("browse", tr(language, "browse")),
+                ("fit", tr(language, "fit")),
+                ("info", tr(language, "info")),
                 ("next", ">"),
             ]
 
