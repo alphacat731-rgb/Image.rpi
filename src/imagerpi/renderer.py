@@ -626,6 +626,39 @@ class Renderer:
         out.write(RESET)
         return out.getvalue()
 
+    def _palette_demo(self, out: StringIO, row: int, left: int, width: int) -> None:
+        swatches = [
+            ("BG", self.config.background),
+            ("FG", self.config.foreground),
+            ("MU", self.config.muted),
+            ("PN", self.config.panel),
+            ("BD", self.config.border),
+            ("AC", self.config.accent),
+            ("SE", self.config.selection),
+        ]
+        slot = max(4, width // len(swatches))
+        x = left
+        for name, color in swatches:
+            cell_w = max(3, min(slot - 1, width - (x - left)))
+            out.write(
+                move(row, x)
+                + rgb_bg(color)
+                + rgb_fg(self.config.foreground)
+                + (" " * cell_w)
+                + RESET
+            )
+            out.write(
+                move(row + 1, x)
+                + style(self.config.muted, self.config.background)
+                + name[:cell_w].center(cell_w)
+            )
+            x += slot
+            if x >= left + width:
+                break
+
+    def _color_depth_text(self) -> str:
+        return "Truecolor / 16.7M image colors" if self.truecolor else "256-color image output"
+
     def options_menu(
         self,
         cols: int,
@@ -680,6 +713,22 @@ class Renderer:
                 )
                 + ("─" * panel_w)
             )
+
+        preview_row = min(rows - 6, first_row + len(items) * 2 + 1)
+        out.write(
+            move(preview_row, left)
+            + style(self.config.foreground, self.config.background, bold=True)
+            + "Palette Preview"
+        )
+        self._palette_demo(out, preview_row + 1, left, panel_w)
+
+        depth = self._color_depth_text()
+        depth_line = f"Theme: 7 UI colors   |   {depth}"
+        out.write(
+            move(preview_row + 3, left)
+            + style(self.config.muted, self.config.background)
+            + depth_line[:panel_w]
+        )
 
         hint = "↑ ↓ Navigate    ← → / Enter Change    Esc Back"
         out.write(
