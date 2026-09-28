@@ -745,6 +745,24 @@ class Renderer:
             if x >= left + width:
                 break
 
+        # Small visible range demo using the selected preset's background/accent.
+        start = self.config.background
+        end = self.config.accent
+        steps = 16
+        segment_w = max(1, width // steps)
+        for i in range(steps):
+            t = i / (steps - 1)
+            color = tuple(
+                int(start[c] + (end[c] - start[c]) * t)
+                for c in range(3)
+            )
+            out.write(
+                move(row + 2, left + i * segment_w)
+                + rgb_bg(color)
+                + " " * segment_w
+                + RESET
+            )
+
     def _color_depth_text(self) -> str:
         return "Truecolor / 16.7M image colors" if self.truecolor else "256-color image output"
 
@@ -814,7 +832,7 @@ class Renderer:
         depth = self._color_depth_text()
         depth_line = f"Theme: 7 UI colors   |   {depth}"
         out.write(
-            move(preview_row + 3, left)
+            move(preview_row + 4, left)
             + style(self.config.muted, self.config.background)
             + depth_line[:panel_w]
         )
