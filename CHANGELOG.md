@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.1
+
+### Improved
+- Friendlier responsive main menu with larger cards, descriptions and touch-safe geometry.
+- Responsive Options layout with a dedicated palette preview on wide terminals.
+- Better viewer toolbar with a real Menu control and cleaner button framing.
+- 16-color ANSI output is now available alongside ANSI256 and Truecolor.
+- Palette preview now shows UI swatches, a color-range strip and the actual image color count.
+- Higher-resolution decoded image sources preserve substantially more detail for 1×–8× zoom.
+
+### Fixed
+- Global Q quit key now works from Options as well as other screens.
+- Viewer Menu touch target was missing despite being handled by the app.
+- Browser now has a real touchscreen Back button.
+- Main-menu compact geometry no longer collides with the footer.
+- Options preview can no longer overlap the settings list on small terminals.
+- Application background is applied before clearing, keeping blank cells consistent with the selected palette.
+- Touch hitboxes no longer include the first cell outside their visible cards.
+
+## 0.2.0
+
 ## 0.2.0
 
 ### Added
