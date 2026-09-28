@@ -1,6 +1,11 @@
 {
   "default_palette": "light",
   "default_display_mode": "rectangles",
+  "quality": "ULTRA",
+  "language": "en",
+  "color_depth": "auto",
+  "recursive_scan": true,
+  "touch_controls": true,
   "terminal_font": "",
 
   "palettes": {
@@ -13,9 +18,9 @@
       "accent": "#2A5AFF",
       "selection": "#191E2D"
     },
-
     "matrix": {
-      "accent": "#14FF37"
+      "accent": "#14FF37",
+      "selection": "#0A4B14"
     }
   }
 }
