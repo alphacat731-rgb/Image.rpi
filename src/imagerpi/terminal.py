@@ -7,6 +7,7 @@ import termios
 import tty
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 
 ESC = "\x1b["
 RESET = ESC + "0m"
@@ -18,6 +19,8 @@ MOUSE_ON = ESC + "?1000h" + ESC + "?1006h"
 MOUSE_OFF = ESC + "?1000l" + ESC + "?1006l"
 CLEAR = ESC + "2J" + ESC + "H"
 ERASE_LINE = ESC + "2K"
+SYNC_BEGIN = ESC + "?2026h"
+SYNC_END = ESC + "?2026l"
 
 
 def _ansi256_index(rgb: tuple[int, int, int]) -> int:
@@ -36,30 +39,30 @@ def _ansi256_index(rgb: tuple[int, int, int]) -> int:
     )
 
 
+@lru_cache(maxsize=1)
 def supports_truecolor() -> bool:
+    if os.getenv("IMAGERPI_COLOR_DEPTH", "").lower() == "truecolor":
+        return True
+    if os.getenv("IMAGERPI_COLOR_DEPTH", "").lower() == "ansi256":
+        return False
     if os.getenv("COLORTERM", "").lower() in {"truecolor", "24bit"}:
         return True
-    term = os.getenv("TERM", "")
-    return (
-        "direct" in term
-        or "truecolor" in term
-        or "kitty" in term
-        or "foot" in term
-    )
+    term = os.getenv("TERM", "").lower()
+    return "direct" in term or "truecolor" in term or "kitty" in term or "foot" in term
 
 
 def rgb_fg(rgb: tuple[int, int, int]) -> str:
     if supports_truecolor():
         r, g, b = rgb
         return f"{ESC}38;2;{r};{g};{b}m"
-    return f"{ESC}38;5;{_ansi256_index(rgb)}m"
+    return rgb_fg_256(rgb)
 
 
 def rgb_bg(rgb: tuple[int, int, int]) -> str:
     if supports_truecolor():
         r, g, b = rgb
         return f"{ESC}48;2;{r};{g};{b}m"
-    return f"{ESC}48;5;{_ansi256_index(rgb)}m"
+    return rgb_bg_256(rgb)
 
 
 def rgb_fg_256(rgb: tuple[int, int, int]) -> str:
@@ -89,10 +92,6 @@ def style(
 
 
 def set_terminal_font(font: str) -> str:
-    """
-    Best-effort xterm OSC 50 font selection.
-    Terminals that do not implement OSC 50 simply ignore the sequence.
-    """
     safe = font.replace("\x1b", "").replace("\x07", "").replace("\n", "")
     return f"\x1b]50;{safe}\x07"
 
@@ -111,66 +110,127 @@ class RawTerminal:
     fd: int = sys.stdin.fileno()
     _old: list | None = None
     _font_was_set: bool = False
+    _input_buffer: str = ""
 
-    def enter(self, font: str = "") -> None:
+    def enter(self, font: str = "", mouse: bool = True) -> None:
         if not os.isatty(self.fd):
             return
         self._old = termios.tcgetattr(self.fd)
         tty.setcbreak(self.fd)
         self.enabled = True
+
         font_sequence = set_terminal_font(font) if font else ""
         self._font_was_set = bool(font_sequence)
-        sys.stdout.write(ALT_SCREEN_ON + HIDE_CURSOR + MOUSE_ON + CLEAR + RESET + font_sequence)
+        mouse_sequence = MOUSE_ON if mouse else ""
+        sys.stdout.write(
+            ALT_SCREEN_ON
+            + HIDE_CURSOR
+            + mouse_sequence
+            + CLEAR
+            + RESET
+            + font_sequence
+        )
         sys.stdout.flush()
 
     def leave(self) -> None:
         if self.enabled:
-            sys.stdout.write(RESET + (reset_terminal_font() if self._font_was_set else "") + MOUSE_OFF + SHOW_CURSOR + ALT_SCREEN_OFF)
+            font_reset = reset_terminal_font() if self._font_was_set else ""
+            sys.stdout.write(
+                SYNC_END
+                + RESET
+                + font_reset
+                + MOUSE_OFF
+                + SHOW_CURSOR
+                + ALT_SCREEN_OFF
+            )
             sys.stdout.flush()
             if self._old is not None:
                 termios.tcsetattr(self.fd, termios.TCSADRAIN, self._old)
         self.enabled = False
+        self._font_was_set = False
+        self._input_buffer = ""
+
+    def _read_available(self) -> str:
+        import select
+
+        chunks: list[str] = []
+        while select.select([self.fd], [], [], 0.01)[0]:
+            data = os.read(self.fd, 64)
+            if not data:
+                break
+            chunks.append(data.decode("utf-8", "ignore"))
+        return "".join(chunks)
 
     def read_key(self) -> str:
         if not self.enabled:
             return sys.stdin.read(1)
 
-        ch = os.read(self.fd, 1).decode("utf-8", "ignore")
-        if ch != "\x1b":
-            return ch
+        if self._input_buffer:
+            data = self._input_buffer
+            self._input_buffer = ""
+        else:
+            data = os.read(self.fd, 1).decode("utf-8", "ignore")
 
-        seq = ch
-        import select
-        while select.select([self.fd], [], [], 0.01)[0]:
-            seq += os.read(self.fd, 1).decode("utf-8", "ignore")
+        if not data:
+            return ""
 
-        if seq.startswith("\x1b[<") and seq.endswith(("M", "m")):
-            payload = seq[3:-1]
-            try:
-                button, x, y = (int(part) for part in payload.split(";"))
-                action = "PRESS" if seq.endswith("M") else "RELEASE"
-                return f"MOUSE:{action}:{button}:{x}:{y}"
-            except (TypeError, ValueError):
-                pass
+        if data[0] != "\x1b":
+            self._input_buffer = data[1:]
+            return data[0]
 
-        return {
-            "\x1b[A": "UP",
-            "\x1b[B": "DOWN",
-            "\x1b[C": "RIGHT",
-            "\x1b[D": "LEFT",
-            "\x1b[H": "HOME",
-            "\x1b[F": "END",
-        }.get(seq, "ESC")
+        data += self._read_available()
 
-    def write(self, text: str) -> None:
+        if data.startswith("\x1b[<"):
+            end = None
+            for i, ch in enumerate(data[3:], start=3):
+                if ch in "Mm":
+                    end = i + 1
+                    break
+
+            if end is not None:
+                sequence = data[:end]
+                self._input_buffer = data[end:]
+                payload = sequence[3:-1]
+                try:
+                    button, x, y = (int(part) for part in payload.split(";"))
+                    action = "PRESS" if sequence.endswith("M") else "RELEASE"
+                    return f"MOUSE:{action}:{button}:{x}:{y}"
+                except (TypeError, ValueError):
+                    return "ESC"
+
+        key_sequences = (
+            ("\x1b[A", "UP"),
+            ("\x1b[B", "DOWN"),
+            ("\x1b[C", "RIGHT"),
+            ("\x1b[D", "LEFT"),
+            ("\x1b[H", "HOME"),
+            ("\x1b[F", "END"),
+            ("\x1b[1~", "HOME"),
+            ("\x1b[4~", "END"),
+            ("\x1b[5~", "PAGEUP"),
+            ("\x1b[6~", "PAGEDOWN"),
+        )
+        for sequence, key in key_sequences:
+            if data.startswith(sequence):
+                self._input_buffer = data[len(sequence):]
+                return key
+
+        self._input_buffer = data[1:]
+        return "ESC"
+
+    def write(self, text: str, *, synchronized: bool = True) -> None:
+        if synchronized:
+            sys.stdout.write(SYNC_BEGIN)
         sys.stdout.write(text)
+        if synchronized:
+            sys.stdout.write(SYNC_END)
         sys.stdout.flush()
 
 
 @contextmanager
-def terminal_session(font: str = ""):
+def terminal_session(font: str = "", mouse: bool = True):
     terminal = RawTerminal()
-    terminal.enter(font)
+    terminal.enter(font, mouse=mouse)
     try:
         yield terminal
     finally:
