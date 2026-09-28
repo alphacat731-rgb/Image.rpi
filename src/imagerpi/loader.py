@@ -6,7 +6,7 @@ from typing import Callable
 
 from PIL import Image, ImageOps
 
-from .config import AppConfig, Quality
+from .config import AppConfig, MAX_SOURCE_PIXELS, MAX_ZOOM, Quality
 
 IMAGE_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif",
@@ -215,17 +215,28 @@ class ImageLoader:
         terminal_cells: tuple[int, int],
     ) -> tuple[int, int]:
         cols, rows = terminal_cells
-        max_w = max(16, (cols - 2) * MAX_SOURCE_X)
-        max_h = max(8, (rows - 7) * MAX_SOURCE_Y)
+
+        # Keep enough source detail for the viewer's maximum zoom instead of
+        # throwing away detail during the initial decode.
+        max_w = max(16, (cols - 2) * MAX_SOURCE_X) * MAX_ZOOM
+        max_h = max(8, (rows - 7) * MAX_SOURCE_Y) * MAX_ZOOM
 
         source_w, source_h = original_size
         fit = min(max_w / source_w, max_h / source_h, 1.0)
         fit *= quality / 100.0
 
-        return (
-            max(8, int(source_w * fit)),
-            max(4, int(source_h * fit)),
-        )
+        target_w = max(8, int(source_w * fit))
+        target_h = max(4, int(source_h * fit))
+
+        # A very large terminal or a huge source image must not turn an image
+        # preview into a multi-hundred-megapixel allocation.
+        pixels = target_w * target_h
+        if pixels > MAX_SOURCE_PIXELS:
+            cap_scale = (MAX_SOURCE_PIXELS / pixels) ** 0.5
+            target_w = max(8, int(target_w * cap_scale))
+            target_h = max(4, int(target_h * cap_scale))
+
+        return target_w, target_h
 
     @staticmethod
     def _composite_white(image: Image.Image) -> Image.Image:
