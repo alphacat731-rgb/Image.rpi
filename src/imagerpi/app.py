@@ -260,10 +260,6 @@ class ImageApp:
 
             self.current = item.image
             self.current_dir = self.current.path.parent
-            self.entries = list_images(
-                self.current_dir,
-                recursive=False,
-            )
             self._sync_index()
             self.zoom = 1.0
             self.pan_x = 0.0
@@ -695,10 +691,6 @@ class ImageApp:
     def _open_browser(self) -> None:
         self.help_overlay = False
         self.info_overlay = False
-        self.entries = list_images(
-            self.current_dir,
-            recursive=self.recursive_scan,
-        )
         self._sync_index()
         self.screen = self.BROWSER
 
