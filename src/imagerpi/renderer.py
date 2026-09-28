@@ -233,12 +233,10 @@ class Renderer:
         out = StringIO()
         self._clean_frame(out)
 
-        center = max(1, cols // 2)
         title = tr(language, "options")
-        title_row = 2
-
+        center = max(1, cols // 2)
         out.write(
-            move(title_row, max(1, center - len(title) // 2))
+            move(2, max(1, center - len(title) // 2))
             + self._style(
                 self.config.foreground,
                 self.config.background,
@@ -266,87 +264,153 @@ class Renderer:
             (tr(language, "back"), ""),
         ]
 
-        panel_w = min(78, max(38, cols - 8))
-        left = max(2, center - panel_w // 2)
-        first_row = 4
+        wide = cols >= 86 and rows >= 18
+        top = 4
+        bottom = max(top, rows - 3)
 
-        preview_height = 4
-        footer_height = 1
-        available = max(1, rows - first_row - preview_height - footer_height)
-        max_items = max(1, min(len(items), available))
+        if wide:
+            list_w = min(48, max(42, cols // 2))
+            preview_w = min(30, max(26, cols - list_w - 8))
+            total_w = list_w + 3 + preview_w
+            left = max(2, center - total_w // 2)
+            preview_left = left + list_w + 3
+        else:
+            list_w = min(78, max(38, cols - 8))
+            left = max(2, center - list_w // 2)
+            preview_left = left
+            preview_w = list_w
+
+        visible_rows = max(1, bottom - top + 1)
+        max_items = min(len(items), visible_rows)
         window_start = max(
             0,
-            min(
-                selected - max_items // 2,
-                len(items) - max_items,
-            ),
+            min(selected - max_items // 2, len(items) - max_items),
         )
 
         for display_i in range(max_items):
             i = window_start + display_i
-            row = first_row + display_i
+            row = top + display_i
             name, value = items[i]
             active = i == selected
 
-            bg = self.config.selection if active else self.config.panel
-            fg = (255, 255, 255) if active else self.config.foreground
-            border = self.config.accent if active else self.config.border
-            marker = "▸ " if active else "  "
-            value_text = f"  {value}" if value else ""
-            label = f"{marker}{name}{value_text}"
+            if wide:
+                bg = self.config.selection if active else self.config.panel
+                fg = (255, 255, 255) if active else self.config.foreground
+                border = self.config.accent if active else self.config.border
 
-            if len(label) > panel_w - 2:
-                label = label[:panel_w - 3] + "…"
-            label = label.ljust(panel_w - 2)
+                out.write(
+                    move(row, left)
+                    + self._style(border, bg)
+                    + ("▌" if active else "│")
+                    + self._style(fg, bg, bold=active)
+                )
+                value_text = f"  {value}" if value else ""
+                label = f" {name}{value_text}"
+                if len(label) > list_w - 3:
+                    label = label[: list_w - 4] + "…"
+                out.write(label.ljust(list_w - 2) + "│")
+            else:
+                bg = self.config.selection if active else self.config.panel
+                fg = (255, 255, 255) if active else self.config.foreground
+                border = self.config.accent if active else self.config.border
+                marker = "▸ " if active else "  "
+                value_text = f"  {value}" if value else ""
+                label = f"{marker}{name}{value_text}"
+                if len(label) > list_w - 2:
+                    label = label[: list_w - 3] + "…"
+                label = label.ljust(list_w - 2)
 
-            out.write(
-                move(row, left)
-                + self._style(border, bg)
-                + "│"
-                + self._style(fg, bg, bold=active)
-                + label
-                + "│"
-            )
+                out.write(
+                    move(row, left)
+                    + self._style(border, bg)
+                    + "│"
+                    + self._style(fg, bg, bold=active)
+                    + label
+                    + "│"
+                )
 
         if window_start > 0:
             out.write(
-                move(first_row, left + panel_w - 3)
+                move(top, left + list_w - 3)
                 + self._style(self.config.accent, self.config.panel, bold=True)
                 + "↑"
             )
         if window_start + max_items < len(items):
             out.write(
-                move(first_row + max_items - 1, left + panel_w - 3)
+                move(top + max_items - 1, left + list_w - 3)
                 + self._style(self.config.accent, self.config.panel, bold=True)
                 + "↓"
             )
 
-        preview_row = min(rows - 5, first_row + max_items + 1)
+        # Dedicated preview card. It shows the selected theme and actual color depth.
+        preview_top = 4
+        preview_h = max(10, min(rows - 7, 16))
         out.write(
-            move(preview_row, left)
-            + self._style(
-                self.config.foreground,
-                self.config.background,
-                bold=True,
-            )
-            + tr(language, "palette_preview")
+            move(preview_top, preview_left)
+            + self._style(self.config.border, self.config.panel)
+            + "╭" + "─" * (preview_w - 2) + "╮"
         )
-        self._palette_demo(out, preview_row + 1, left, panel_w)
+        preview_title = tr(language, "palette_preview")
+        out.write(
+            move(preview_top + 1, preview_left)
+            + self._style(self.config.foreground, self.config.panel, bold=True)
+            + "│"
+            + preview_title.center(preview_w - 2)
+            + "│"
+        )
+        palette_line = f"  {palette.label}  "
+        out.write(
+            move(preview_top + 2, preview_left)
+            + self._style(self.config.accent, self.config.panel, bold=True)
+            + "│"
+            + palette_line.center(preview_w - 2)
+            + "│"
+        )
 
-        depth_text = self._color_depth_short(language)
+        self._palette_demo(out, preview_top + 4, preview_left + 2, preview_w - 4)
+
+        color_count = tr(
+            language,
+            "image_colors",
+            count=self._color_count_short(),
+        )
+        lines = [
+            color_count,
+            f"{tr(language, 'color_depth')}: {self._color_depth_short(language)}",
+            f"{tr(language, 'display_mode')}: {display_mode.label}",
+            f"{tr(language, 'font')}: {terminal_font or 'Default'}",
+        ]
+        for i, line in enumerate(lines):
+            if preview_top + 7 + i >= preview_top + preview_h - 1:
+                break
+            out.write(
+                move(preview_top + 7 + i, preview_left + 2)
+                + self._style(self.config.muted, self.config.panel)
+                + line[: preview_w - 4]
+            )
+
+        bottom_row = preview_top + preview_h
+        if bottom_row < rows:
+            out.write(
+                move(bottom_row, preview_left)
+                + self._style(self.config.border, self.config.panel)
+                + "╰" + "─" * (preview_w - 2) + "╯"
+            )
+
         term_text = tr(language, "terminal", cols=cols, rows=rows)
         count_text = tr(language, "image_count", count=image_count)
-        color_count = tr(language, "image_colors", count=self._color_count_short())
-        meta = f"{term_text}   •   {count_text}   •   {depth_text}   •   {color_count}"
+        meta = f"{term_text}   •   {count_text}"
+        meta_y = min(rows - 2, max(top + max_items + 1, bottom_row + 1))
         out.write(
-            move(min(rows - 3, preview_row + 3), left)
+            move(meta_y, max(1, center - len(meta) // 2))
             + self._style(self.config.muted, self.config.background)
-            + meta[:panel_w]
+            + meta[: max(1, cols - 2)]
         )
 
         hint = (
             f"↑ ↓ {tr(language, 'navigate')}   "
             f"← → {tr(language, 'select')}   "
+            f"Enter {tr(language, 'select')}   "
             f"Esc {tr(language, 'back_hint')}"
         )
         out.write(
@@ -356,6 +420,7 @@ class Renderer:
         )
         out.write(RESET)
         return out.getvalue()
+
 
 
     def browser(
@@ -1188,25 +1253,35 @@ class Renderer:
         selected: int,
         item_count: int = 10,
     ) -> int | None:
-        panel_w = min(78, max(38, cols - 8))
-        left = max(2, cols // 2 - panel_w // 2)
-        first_row = 4
-        preview_height = 4
-        footer_height = 1
-        available = max(1, rows - first_row - preview_height - footer_height)
-        max_items = max(1, min(item_count, available))
+        center = max(1, cols // 2)
+        wide = cols >= 86 and rows >= 18
+        if wide:
+            list_w = min(48, max(42, cols // 2))
+            preview_w = min(30, max(26, cols - list_w - 8))
+            total_w = list_w + 3 + preview_w
+            left = max(2, center - total_w // 2)
+        else:
+            list_w = min(78, max(38, cols - 8))
+            left = max(2, center - list_w // 2)
+
+        top = 4
+        bottom = max(top, rows - 3)
+        visible_rows = max(1, bottom - top + 1)
+        max_items = min(item_count, visible_rows)
         window_start = max(
             0,
-            min(selected - max_items // 2, max(0, item_count - max_items)),
+            min(selected - max_items // 2, item_count - max_items),
         )
 
-        if not (left <= x < left + panel_w):
+        if not (left <= x < left + list_w):
             return None
-        if y < first_row or y >= first_row + max_items:
+        if y < top or y >= top + max_items:
             return None
 
-        index = window_start + (y - first_row)
+        index = window_start + (y - top)
         return index if index < item_count else None
+
+
 
     @staticmethod
     def browser_hit(
