@@ -14,8 +14,10 @@ from .terminal import (
     RESET,
     move,
     rgb_bg,
+    rgb_bg_16,
     rgb_bg_256,
     rgb_fg,
+    rgb_fg_16,
     rgb_fg_256,
     style,
     supports_truecolor,
@@ -35,10 +37,18 @@ class Renderer:
         )
 
     def _fg(self, rgb: tuple[int, int, int]) -> str:
-        return rgb_fg(rgb, self.truecolor) if self.truecolor else rgb_fg_256(rgb)
+        if self.truecolor:
+            return rgb_fg(rgb, True)
+        if self.config.color_depth is ColorDepth.ANSI16:
+            return rgb_fg_16(rgb)
+        return rgb_fg_256(rgb)
 
     def _bg(self, rgb: tuple[int, int, int]) -> str:
-        return rgb_bg(rgb, self.truecolor) if self.truecolor else rgb_bg_256(rgb)
+        if self.truecolor:
+            return rgb_bg(rgb, True)
+        if self.config.color_depth is ColorDepth.ANSI16:
+            return rgb_bg_16(rgb)
+        return rgb_bg_256(rgb)
 
     def _style(
         self,
@@ -71,17 +81,11 @@ class Renderer:
         out = StringIO()
         self._clean_frame(out)
 
+        center = max(1, cols // 2)
+        left, title_row, first_row, button_w, button_h, gap = self._main_menu_geometry(cols, rows)
+
         title = tr(language, "app_title")
         subtitle = tr(language, "subtitle")
-        items = [
-            tr(language, "view_images"),
-            tr(language, "options"),
-            tr(language, "quit"),
-        ]
-
-        center = max(1, cols // 2)
-        _, title_row, first_row, button_w, button_h, gap = self._main_menu_geometry(cols, rows)
-
         logo = f"◆ {title} ◆"
         out.write(
             move(title_row, max(1, center - len(logo) // 2))
@@ -92,10 +96,18 @@ class Renderer:
             )
             + logo
         )
+
+        spaced = " ".join(title)
         out.write(
-            move(title_row + 1, max(1, center - len(subtitle) // 2))
+            move(title_row + 1, max(1, center - len(spaced) // 2))
+            + self._style(self.config.accent, self.config.background, bold=True)
+            + spaced
+        )
+
+        out.write(
+            move(title_row + 2, max(1, center - len(subtitle) // 2))
             + self._style(self.config.muted, self.config.background)
-            + subtitle.upper()
+            + subtitle
         )
 
         count_text = tr(language, "image_count", count=image_count)
@@ -107,45 +119,98 @@ class Renderer:
             + meta[: max(1, cols - 2)]
         )
 
-        left = max(2, center - button_w // 2)
+        items = [
+            (
+                "1",
+                tr(language, "view_images"),
+                tr(language, "view_images_desc"),
+                "▣",
+            ),
+            (
+                "2",
+                tr(language, "options"),
+                tr(language, "options_desc"),
+                "⚙",
+            ),
+            (
+                "3",
+                tr(language, "quit"),
+                tr(language, "quit_desc"),
+                "×",
+            ),
+        ]
 
-        for i, item in enumerate(items):
+        for i, (number, label, description, icon) in enumerate(items):
             row = first_row + i * (button_h + gap)
             active = i == selected
             bg = self.config.selection if active else self.config.panel
             fg = (255, 255, 255) if active else self.config.foreground
             border = self.config.accent if active else self.config.border
 
-            out.write(
-                move(row, left)
-                + self._style(border, bg)
-                + "╭" + "─" * (button_w - 2) + "╮"
-            )
-            out.write(
-                move(row + 1, left)
-                + self._style(fg, bg, bold=active)
-                + "│"
-                + (
-                    ("  ▸ " if active else "    ")
-                    + item
-                ).ljust(button_w - 1)
-                + "│"
-            )
-            if button_h == 3:
+            if button_h >= 4:
+                top = "╭" + "─" * (button_w - 2) + "╮"
+                middle = f"│  {icon}  {number}  {label}"
+                detail = f"│      {description}"
+                bottom = "╰" + "─" * (button_w - 2) + "╯"
+
+                out.write(move(row, left) + self._style(border, bg) + top)
+                out.write(
+                    move(row + 1, left)
+                    + self._style(fg, bg, bold=active)
+                    + middle.ljust(button_w - 1)[: button_w - 1]
+                    + "│"
+                )
                 out.write(
                     move(row + 2, left)
+                    + self._style(
+                        self.config.muted if not active else (225, 235, 255),
+                        bg,
+                    )
+                    + detail.ljust(button_w - 1)[: button_w - 1]
+                    + "│"
+                )
+                out.write(move(row + 3, left) + self._style(border, bg) + bottom)
+            elif button_h == 3:
+                top = "╭" + "─" * (button_w - 2) + "╮"
+                middle = f"│  {icon}  {number}  {label}"
+                bottom = "╰" + "─" * (button_w - 2) + "╯"
+                out.write(move(row, left) + self._style(border, bg) + top)
+                out.write(
+                    move(row + 1, left)
+                    + self._style(fg, bg, bold=active)
+                    + middle.ljust(button_w - 1)[: button_w - 1]
+                    + "│"
+                )
+                out.write(move(row + 2, left) + self._style(border, bg) + bottom)
+            else:
+                out.write(
+                    move(row, left)
                     + self._style(border, bg)
-                    + "╰" + "─" * (button_w - 2) + "╯"
+                    + "┌" + "─" * (button_w - 2) + "┐"
+                )
+                label_line = f"│  {icon}  {number}  {label}"
+                out.write(
+                    move(row + 1, left)
+                    + self._style(fg, bg, bold=active)
+                    + label_line.ljust(button_w - 1)[: button_w - 1]
+                    + "│"
                 )
 
-        hint = f"↑ ↓ {tr(language, 'navigate')}    Enter {tr(language, 'select')}    Q {tr(language, 'quit')}"
+        hint = (
+            f"↑ ↓ {tr(language, 'navigate')}   "
+            f"Enter {tr(language, 'select')}   "
+            f"1/2/3 {tr(language, 'select')}   "
+            f"Q {tr(language, 'quit')}"
+        )
+        footer_row = max(1, rows - 1)
         out.write(
-            move(rows - 2, max(1, center - len(hint) // 2))
+            move(footer_row, max(1, center - len(hint) // 2))
             + self._style(self.config.muted, self.config.background)
             + hint[: max(1, cols - 2)]
         )
         out.write(RESET)
         return out.getvalue()
+
 
     def options_menu(
         self,
@@ -269,7 +334,8 @@ class Renderer:
         depth_text = self._color_depth_short(language)
         term_text = tr(language, "terminal", cols=cols, rows=rows)
         count_text = tr(language, "image_count", count=image_count)
-        meta = f"{term_text}   •   {count_text}   •   {depth_text}"
+        color_count = tr(language, "image_colors", count=self._color_count_short())
+        meta = f"{term_text}   •   {count_text}   •   {depth_text}   •   {color_count}"
         out.write(
             move(min(rows - 3, preview_row + 3), left)
             + self._style(self.config.muted, self.config.background)
@@ -898,11 +964,12 @@ class Renderer:
         zoom: float,
         row: int,
     ) -> None:
-        if cols < 58:
+        compact = cols < 72
+        if compact:
             buttons = [
+                ("menu", "M"),
                 ("prev", "<"),
                 ("zoom_out", "-"),
-                ("browse", "B"),
                 ("fit", "F"),
                 ("info", "I"),
                 ("zoom_in", "+"),
@@ -910,13 +977,14 @@ class Renderer:
             ]
         else:
             buttons = [
-                ("prev", "<"),
+                ("menu", tr(language, "menu")),
+                ("prev", "‹"),
                 ("zoom_out", "−"),
                 ("browse", tr(language, "browse")),
                 ("fit", tr(language, "fit")),
                 ("info", tr(language, "info")),
                 ("zoom_in", "+"),
-                ("next", ">"),
+                ("next", "›"),
             ]
 
         gap = 1
@@ -925,6 +993,7 @@ class Renderer:
 
         if total > cols - 2:
             buttons = [
+                ("menu", "M"),
                 ("prev", "<"),
                 ("zoom_out", "-"),
                 ("browse", "B"),
@@ -933,8 +1002,8 @@ class Renderer:
                 ("zoom_in", "+"),
                 ("next", ">"),
             ]
-            widths = [5, 5, 5, 5, 5, 5, 5]
-            total = sum(widths) + gap * 6
+            widths = [5] * len(buttons)
+            total = sum(widths) + gap * (len(buttons) - 1)
 
         left = max(1, (cols - total) // 2)
 
@@ -945,31 +1014,40 @@ class Renderer:
         )
 
         x = left
-        for (_, label), width in zip(buttons, widths):
+        for (action, label), width in zip(buttons, widths):
+            active = (
+                (action == "fit" and abs(zoom - 1.0) < 0.001)
+                or (action == "zoom_in" and zoom > 1.0)
+            )
+            bg = self.config.selection if active else self.config.panel
+            fg = (255, 255, 255) if active else self.config.foreground
+            border = self.config.accent if active else self.config.border
+
             out.write(
                 move(row + 1, x)
-                + self._style(self.config.border, self.config.panel)
+                + self._style(border, bg)
                 + "╭" + "─" * (width - 2) + "╮"
             )
             out.write(
                 move(row + 2, x)
-                + self._style(
-                    self.config.foreground,
-                    self.config.panel,
-                    bold=True,
-                )
-                + "│" + label.center(width - 2) + "│"
+                + self._style(fg, bg, bold=True)
+                + "│"
+                + label.center(width - 2)
+                + "│"
+            )
+            out.write(
+                move(row + 3, x)
+                + self._style(border, bg)
+                + "╰" + "─" * (width - 2) + "╯"
             )
             x += width + gap
 
         zoom_text = tr(language, "zoom", value=f"{zoom:g}")
-        available = max(0, left - 3)
-        if available >= len(zoom_text):
-            out.write(
-                move(row + 2, 2)
-                + self._style(self.config.muted, self.config.background)
-                + zoom_text[:available]
-            )
+        out.write(
+            move(row + 4, max(1, (cols - len(zoom_text)) // 2))
+            + self._style(self.config.muted, self.config.background)
+            + zoom_text[: max(1, cols - 2)]
+        )
 
     def _palette_demo(self, out: StringIO, row: int, left: int, width: int) -> None:
         colors = [
@@ -1009,7 +1087,18 @@ class Renderer:
             )
 
     def _color_depth_short(self, language: Language) -> str:
-        return tr(language, "truecolor") if self.truecolor else tr(language, "ansi256")
+        if self.truecolor:
+            return tr(language, "truecolor")
+        if self.config.color_depth is ColorDepth.ANSI16:
+            return tr(language, "ansi16")
+        return tr(language, "ansi256")
+
+    def _color_count_short(self) -> str:
+        if self.truecolor:
+            return "16,777,216"
+        if self.config.color_depth is ColorDepth.ANSI16:
+            return "16"
+        return "256"
 
     @staticmethod
     def _size_text(size: int) -> str:
@@ -1117,6 +1206,7 @@ class Renderer:
 
     @staticmethod
     def viewer_hit(
+        self,
         x: int,
         y: int,
         cols: int,
@@ -1124,14 +1214,15 @@ class Renderer:
         language: Language = Language.ENGLISH,
     ) -> str | None:
         toolbar_row = rows - 4
-        if y < toolbar_row + 1 or y > toolbar_row + 2:
+        if y < toolbar_row + 1 or y > toolbar_row + 3:
             return None
 
-        if cols < 58:
+        compact = cols < 72
+        if compact:
             labels = [
+                ("menu", "M"),
                 ("prev", "<"),
                 ("zoom_out", "-"),
-                ("browse", "B"),
                 ("fit", "F"),
                 ("info", "I"),
                 ("zoom_in", "+"),
@@ -1139,20 +1230,22 @@ class Renderer:
             ]
         else:
             labels = [
-                ("prev", "<"),
+                ("menu", tr(language, "menu")),
+                ("prev", "‹"),
                 ("zoom_out", "−"),
                 ("browse", tr(language, "browse")),
                 ("fit", tr(language, "fit")),
                 ("info", tr(language, "info")),
                 ("zoom_in", "+"),
-                ("next", ">"),
+                ("next", "›"),
             ]
 
         gap = 1
         widths = [max(5, len(label) + 4) for _, label in labels]
-        total = sum(widths) + gap * 6
+        total = sum(widths) + gap * (len(labels) - 1)
         if total > cols - 2:
             labels = [
+                ("menu", "M"),
                 ("prev", "<"),
                 ("zoom_out", "-"),
                 ("browse", "B"),
@@ -1161,8 +1254,8 @@ class Renderer:
                 ("zoom_in", "+"),
                 ("next", ">"),
             ]
-            widths = [5, 5, 5, 5, 5, 5, 5]
-            total = sum(widths) + gap * 6
+            widths = [5] * len(labels)
+            total = sum(widths) + gap * (len(labels) - 1)
 
         left = max(1, (cols - total) // 2)
         current_x = left
@@ -1172,46 +1265,6 @@ class Renderer:
             current_x += width + gap
 
         return None
-
-    def _help_overlay(self, out: StringIO, cols: int, rows: int, language: Language) -> None:
-        lines = [
-            tr(language, "app_title"),
-            "",
-            "A  Display mode",
-            "P  Color palette",
-            "+/-  Zoom",
-            "0  Fit to screen",
-            "I  Image information",
-            "H  Help",
-            "O  Browse",
-            "Esc  Main menu",
-            "Q  Quit",
-        ]
-        self._overlay(out, cols, rows, lines)
-
-    def _info_overlay(
-        self,
-        out: StringIO,
-        cols: int,
-        rows: int,
-        image: LoadedImage,
-        quality: Quality,
-        display_mode: DisplayMode,
-        zoom: float,
-        language: Language,
-    ) -> None:
-        lines = [
-            tr(language, "info").upper(),
-            "",
-            f"File: {image.path.name}",
-            f"Original: {image.original_size[0]} × {image.original_size[1]}",
-            f"Preview: {image.source_size[0]} × {image.source_size[1]}",
-            f"Mode: {display_mode.label}",
-            f"Quality: {quality.label}",
-            f"Zoom: {zoom:g}x",
-            f"File size: {self._size_text(image.file_bytes)}",
-        ]
-        self._overlay(out, cols, rows, lines)
 
     def _overlay(self, out: StringIO, cols: int, rows: int, lines: list[str]) -> None:
         width = min(72, max(34, cols - 6))
