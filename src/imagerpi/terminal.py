@@ -51,15 +51,23 @@ def supports_truecolor() -> bool:
     return "direct" in term or "truecolor" in term or "kitty" in term or "foot" in term
 
 
-def rgb_fg(rgb: tuple[int, int, int]) -> str:
-    if supports_truecolor():
+def rgb_fg(
+    rgb: tuple[int, int, int],
+    truecolor: bool | None = None,
+) -> str:
+    use_truecolor = supports_truecolor() if truecolor is None else truecolor
+    if use_truecolor:
         r, g, b = rgb
         return f"{ESC}38;2;{r};{g};{b}m"
     return rgb_fg_256(rgb)
 
 
-def rgb_bg(rgb: tuple[int, int, int]) -> str:
-    if supports_truecolor():
+def rgb_bg(
+    rgb: tuple[int, int, int],
+    truecolor: bool | None = None,
+) -> str:
+    use_truecolor = supports_truecolor() if truecolor is None else truecolor
+    if use_truecolor:
         r, g, b = rgb
         return f"{ESC}48;2;{r};{g};{b}m"
     return rgb_bg_256(rgb)
