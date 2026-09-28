@@ -8,7 +8,6 @@ import threading
 import time
 
 from .config import (
-    MAX_ZOOM,
     AppConfig,
     ColorDepth,
     DisplayMode,
