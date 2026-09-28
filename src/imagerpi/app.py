@@ -472,6 +472,10 @@ class ImageApp:
             return
 
         if key == "ESC":
+            if self.help_overlay or self.info_overlay:
+                self.help_overlay = False
+                self.info_overlay = False
+                return
             self._go_main()
             return
 
@@ -668,6 +672,10 @@ class ImageApp:
             self.index = max(0, self.index - 1)
         elif key == "DOWN":
             self.index = min(max(0, len(self.entries) - 1), self.index + 1)
+        elif key == "HOME":
+            self.index = 0
+        elif key == "END":
+            self.index = max(0, len(self.entries) - 1)
         elif key == "PAGEUP":
             self.index = max(0, self.index - 8)
         elif key == "PAGEDOWN":
