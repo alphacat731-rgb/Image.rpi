@@ -631,15 +631,23 @@ class Renderer:
         top_space = max(0, scaled_h - target_h)
         cx = left_space * (0.5 + max(-1.0, min(1.0, pan_x)) * 0.5)
         cy = top_space * (0.5 + max(-1.0, min(1.0, pan_y)) * 0.5)
+
+        crop_w = min(target_w, scaled_w)
+        crop_h = min(target_h, scaled_h)
+        src_x = int(min(max(cx, 0), max(0, scaled_w - crop_w)))
+        src_y = int(min(max(cy, 0), max(0, scaled_h - crop_h)))
+
         crop = resized.crop(
             (
-                int(cx),
-                int(cy),
-                int(cx) + target_w,
-                int(cy) + target_h,
+                src_x,
+                src_y,
+                src_x + crop_w,
+                src_y + crop_h,
             )
         )
-        canvas.paste(crop, (0, 0))
+        dst_x = (target_w - crop_w) // 2
+        dst_y = (target_h - crop_h) // 2
+        canvas.paste(crop, (dst_x, dst_y))
         return canvas
 
     @staticmethod
