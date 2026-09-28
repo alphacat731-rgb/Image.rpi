@@ -242,7 +242,7 @@ class ImageApp:
                     self.status = f"Scan error: {item.error}"
                     self.entries = []
                 else:
-                            self.entries = item.entries or []
+                    self.entries = item.entries or []
                     self.library_root = self.current_dir
                     self._sync_index()
 
