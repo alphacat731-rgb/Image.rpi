@@ -426,7 +426,7 @@ class Renderer:
                 )
 
             bottom_row = preview_top + preview_h
-            if bottom_row < rows:
+            if bottom_row < rows - 2:
                 out.write(
                     move(bottom_row, preview_left)
                     + self._style(self.config.border, self.config.panel)
