@@ -90,8 +90,25 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(renderer.main_menu_hit(40, 10, 80, 24), 1)
         self.assertEqual(renderer.viewer_hit(20, 20, 80, 24), None)
         self.assertEqual(renderer.viewer_hit(30, 21, 80, 24), "browse")
-        self.assertEqual(renderer.viewer_hit(16, 21, 80, 24), "prev")
+        self.assertEqual(renderer.viewer_hit(16, 21, 80, 24), "menu")
         self.assertEqual(renderer.viewer_hit(30, 21, 80, 24), "browse")
+
+    def test_main_menu_geometry_keeps_footer_clear(self) -> None:
+        from imagerpi.renderer import Renderer
+
+        for rows in (12, 13, 16, 20, 21, 22, 24, 30):
+            with self.subTest(rows=rows):
+                left, title_row, first_row, width, height, gap = Renderer._main_menu_geometry(80, rows)
+                footer_row = rows - 1
+                last_row = first_row + 2 * (height + gap) + height - 1
+                self.assertLess(last_row, footer_row)
+                self.assertGreaterEqual(first_row, title_row + 4)
+
+    def test_viewer_has_menu_touch_target(self) -> None:
+        from imagerpi.renderer import Renderer
+
+        renderer = Renderer(AppConfig())
+        self.assertEqual(renderer.viewer_hit(16, 21, 80, 24), "menu")
 
     def test_small_terminal_menu_geometry(self) -> None:
         from imagerpi.renderer import Renderer
