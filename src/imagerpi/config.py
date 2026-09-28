@@ -283,10 +283,9 @@ class AppConfig:
             os.getenv("IMAGERPI_LARGE_FILE_MB"), 24
         ) * 1024 * 1024
         fps = max(8, min(30, _positive_int(os.getenv("IMAGERPI_FPS"), 20)))
-        quality_name = os.getenv("IMAGERPI_QUALITY", "ULTRA").upper()
-        quality = getattr(Quality, quality_name, Quality.ULTRA)
-
         user = load_user_config()
+        quality_name = os.getenv("IMAGERPI_QUALITY", str(user.get("quality", "ULTRA"))).upper()
+        quality = getattr(Quality, quality_name, Quality.ULTRA)
         palette_name = str(user.get("default_palette", "light")).lower()
         palette = next((p for p in Palette if p.value == palette_name), Palette.LIGHT)
 
