@@ -8,6 +8,7 @@ import threading
 import time
 
 from .config import (
+    MAX_ZOOM,
     AppConfig,
     ColorDepth,
     DisplayMode,
@@ -445,6 +446,11 @@ class ImageApp:
         return term.read_key() if ready else ""
 
     def _handle_key(self, key: str) -> None:
+        # Q is a global quit key so it also works from Options.
+        if key in {"q", "Q"}:
+            self.running = False
+            return
+
         if key.startswith("MOUSE:PRESS:"):
             self._handle_mouse(key)
             return
@@ -676,10 +682,20 @@ class ImageApp:
             return
 
         try:
+            button = int(parts[2])
             x = int(parts[3])
             y = int(parts[4])
         except ValueError:
             return
+
+        # Standard SGR mouse wheel buttons: 64 = up, 65 = down.
+        if self.screen == self.VIEWER:
+            if button == 64:
+                self._zoom(1)
+                return
+            if button == 65:
+                self._zoom(-1)
+                return
 
         size = terminal_size()
         cols, rows = max(size.columns, 40), max(size.lines, 12)
@@ -701,6 +717,7 @@ class ImageApp:
             )
             if hit is not None:
                 self.options_index = hit
+                # Match keyboard Enter semantics for the selected row.
                 self._handle_options_key("\n")
             return
 
@@ -746,6 +763,7 @@ class ImageApp:
                 self._zoom(1)
             elif action == "zoom_out":
                 self._zoom(-1)
+
 
     def _open_browser(self) -> None:
         self.help_overlay = False
