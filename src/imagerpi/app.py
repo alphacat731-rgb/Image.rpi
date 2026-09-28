@@ -7,8 +7,17 @@ import select
 import threading
 import time
 
-from .config import AppConfig, DisplayMode, Palette, Quality
-from .loader import ImageLoader, LoadEvent, LoadedImage, list_images
+from .config import (
+    AppConfig,
+    ColorDepth,
+    DisplayMode,
+    Language,
+    Palette,
+    Quality,
+    save_user_config,
+)
+from .i18n import tr
+from .loader import ImageLoader, LoadEvent, LoadedImage, ScanEvent, list_images
 from .renderer import Renderer
 from .terminal import terminal_session, terminal_size
 
@@ -19,7 +28,14 @@ class LoadedResult:
     error: Exception | None
 
 
+@dataclass(slots=True)
+class ScanResult:
+    entries: list[Path] | None
+    error: Exception | None
+
+
 class ImageApp:
+    STARTUP = "startup"
     MAIN = "main"
     OPTIONS = "options"
     BROWSER = "browser"
@@ -33,85 +49,273 @@ class ImageApp:
         self.quality = self.config.default_quality
         self.display_mode = self.config.default_display_mode
         self.palette = self.config.default_palette
+        self.color_depth = self.config.color_depth
+        self.language = self.config.language
+        self.recursive_scan = self.config.recursive_scan
+        self.touch_controls = self.config.touch_controls
+
         self.config.apply_palette(self.palette)
 
         self.current: LoadedImage | None = None
-        self.screen = self.MAIN
+        self.current_dir = Path.cwd().resolve()
+        self.pending_open: Path | None = None
+
+        raw_path = Path(initial).expanduser().resolve() if initial else None
+        if raw_path is not None:
+            if raw_path.is_file():
+                self.current_dir = raw_path.parent
+                self.pending_open = raw_path
+            elif raw_path.is_dir():
+                self.current_dir = raw_path
+
+        self.entries: list[Path] = []
+        self.index = 0
+
+        self.screen = self.STARTUP
         self.menu_index = 0
         self.options_index = 0
 
-        raw_path = Path(initial).expanduser().resolve() if initial else Path.cwd()
-        self.current_dir = raw_path.parent if raw_path.is_file() else raw_path
-
-        self.entries = list_images(self.current_dir)
-        self.index = 0
-
-        if initial and raw_path.is_file():
-            try:
-                self.index = self.entries.index(raw_path)
-            except ValueError:
-                self.entries.append(raw_path)
-                self.entries.sort(key=lambda p: p.name.casefold())
-                self.index = self.entries.index(raw_path)
+        self.zoom = 1.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
 
         self.help_overlay = False
         self.info_overlay = False
         self.status = ""
 
-        self.load_queue: queue.Queue[LoadEvent | LoadedResult] = queue.Queue()
+        self.work_queue: queue.Queue[
+            ScanEvent | ScanResult | LoadEvent | LoadedResult
+        ] = queue.Queue()
+
+        self.scanning = False
         self.loading = False
         self.running = True
-        self._progress = LoadEvent("open", 0.0, "Loading...")
+
+        self._scan_progress = 0.0
+        self._scan_message = "Scanning..."
+        self._scan_found = 0
+
+        self._progress = LoadEvent("open", 0.0, "Opening image...")
         self._last_signature: tuple | None = None
         self._last_render_time = 0.0
+        self._last_terminal_size = terminal_size()
+
+        self._start_scan()
 
     def run(self) -> None:
-        with terminal_session(self.config.terminal_font) as term:
-            force = True
+        try:
+            with terminal_session(
+                self.config.terminal_font,
+                mouse=self.touch_controls,
+            ) as term:
+                force = True
 
-            while self.running:
-                self._drain_load()
-                signature = self._render_signature()
+                while self.running:
+                    self._drain_work()
+                    self._check_terminal_resize()
 
-                now = time.monotonic()
-                render_allowed = (
-                    not self.loading
-                    or now - self._last_render_time >= 1.0 / 12.0
-                    or self._progress.progress >= 1.0
+                    signature = self._render_signature()
+                    now = time.monotonic()
+                    render_allowed = (
+                        not (self.scanning or self.loading)
+                        or now - self._last_render_time >= 1.0 / 12.0
+                    )
+
+                    if force or (
+                        signature != self._last_signature
+                        and render_allowed
+                    ):
+                        term.write(self._render())
+                        self._last_signature = signature
+                        self._last_render_time = now
+                        force = False
+
+                    key = self._read_key_with_timeout(
+                        term,
+                        1.0 / self.config.render_fps,
+                    )
+                    if key:
+                        self._handle_key(key)
+                        force = True
+        finally:
+            self._save_settings()
+
+    def _save_settings(self) -> None:
+        overrides: dict[str, dict[str, str]] = {}
+        raw_overrides = self.config.palette_overrides or {}
+
+        for palette_name, colors in raw_overrides.items():
+            overrides[palette_name] = {
+                key: "#{:02X}{:02X}{:02X}".format(*value)
+                for key, value in colors.items()
+            }
+
+        save_user_config(
+            palette=self.palette,
+            display_mode=self.display_mode,
+            quality=self.quality,
+            language=self.language,
+            color_depth=self.color_depth,
+            recursive_scan=self.recursive_scan,
+            touch_controls=self.touch_controls,
+            terminal_font=self.config.terminal_font,
+        )
+
+    def _start_scan(self) -> None:
+        if self.scanning:
+            return
+
+        self.scanning = True
+        self._scan_progress = 0.0
+        self._scan_found = 0
+        self._scan_message = str(self.current_dir)
+
+        root = self.current_dir
+        recursive = self.recursive_scan
+
+        def worker() -> None:
+            try:
+                entries = list_images(
+                    root,
+                    recursive=recursive,
+                    on_event=self.work_queue.put,
                 )
+                self.work_queue.put(ScanResult(entries, None))
+            except Exception as exc:
+                self.work_queue.put(ScanResult(None, exc))
 
-                if force or (
-                    signature != self._last_signature and render_allowed
-                ):
-                    term.write(self._render())
-                    self._last_signature = signature
-                    self._last_render_time = now
-                    force = False
+        threading.Thread(
+            target=worker,
+            name="library-scanner",
+            daemon=True,
+        ).start()
 
-                key = self._read_key_with_timeout(
-                    term,
-                    1.0 / self.config.render_fps,
+    def _start_load(self, path: Path) -> None:
+        if self.loading:
+            return
+
+        self.loading = True
+        self._progress = LoadEvent(
+            "open",
+            0.0,
+            tr(self.language, "opening"),
+        )
+        cells = (terminal_size().columns, terminal_size().lines)
+        quality = self.quality
+
+        def worker() -> None:
+            try:
+                loaded = self.loader.load(
+                    path,
+                    quality,
+                    cells,
+                    self.work_queue.put,
                 )
-                if key:
-                    self._handle_key(key)
-                    force = True
+                self.work_queue.put(LoadedResult(loaded, None))
+            except Exception as exc:
+                self.work_queue.put(LoadedResult(None, exc))
+
+        threading.Thread(
+            target=worker,
+            name="image-loader",
+            daemon=True,
+        ).start()
+
+    def _drain_work(self) -> None:
+        while True:
+            try:
+                item = self.work_queue.get_nowait()
+            except queue.Empty:
+                return
+
+            if isinstance(item, ScanEvent):
+                self._scan_progress = item.progress
+                self._scan_message = item.message
+                self._scan_found = item.found
+                continue
+
+            if isinstance(item, ScanResult):
+                self.scanning = False
+                if item.error:
+                    self.status = f"Scan error: {item.error}"
+                    self.entries = []
+                else:
+                    self.entries = item.entries or []
+                    self._sync_index()
+
+                if self.screen == self.STARTUP:
+                    self.screen = self.MAIN
+
+                continue
+
+            if isinstance(item, LoadEvent):
+                self._progress = item
+                continue
+
+            self.loading = False
+            if item.error:
+                self.status = f"Load error: {item.error}"
+                self.info_overlay = False
+                continue
+
+            self.current = item.image
+            self.current_dir = self.current.path.parent
+            self.entries = list_images(
+                self.current_dir,
+                recursive=False,
+            )
+            self._sync_index()
+            self.zoom = 1.0
+            self.pan_x = 0.0
+            self.pan_y = 0.0
+            self.screen = self.VIEWER
+            self.status = f"{self.current.path.name}"
+
+    def _sync_index(self) -> None:
+        if not self.entries:
+            self.index = 0
+            return
+        if self.current is not None:
+            try:
+                self.index = self.entries.index(self.current.path)
+                return
+            except ValueError:
+                pass
+        self.index = max(0, min(self.index, len(self.entries) - 1))
+
+    def _check_terminal_resize(self) -> None:
+        size = terminal_size()
+        old = self._last_terminal_size
+        if size == old:
+            return
+
+        self._last_terminal_size = size
+        if (
+            self.current is not None
+            and self.screen == self.VIEWER
+            and not self.loading
+        ):
+            self._start_load(self.current.path)
 
     def _render_signature(self) -> tuple:
-        current_path = str(self.current.path) if self.current else None
         size = terminal_size()
-
         progress = (
             self._progress.stage,
             round(self._progress.progress, 3),
             self._progress.message,
         ) if self.loading else None
+        scan = (
+            round(self._scan_progress, 3),
+            self._scan_message,
+            self._scan_found,
+        ) if self.scanning else None
 
         return (
             self.screen,
+            self.scanning,
+            scan,
             self.loading,
             progress,
-            current_path,
-            len(self.entries),
             self.index,
             self.menu_index,
             self.options_index,
@@ -121,6 +325,15 @@ class ImageApp:
             self.quality,
             self.display_mode,
             self.palette,
+            self.color_depth,
+            self.language,
+            self.recursive_scan,
+            self.touch_controls,
+            self.zoom,
+            round(self.pan_x, 3),
+            round(self.pan_y, 3),
+            str(self.current.path) if self.current else None,
+            len(self.entries),
             size.columns,
             size.lines,
         )
@@ -129,24 +342,67 @@ class ImageApp:
         size = terminal_size()
         cols, rows = max(size.columns, 40), max(size.lines, 12)
 
+        if self.scanning:
+            return self.renderer.progress(
+                "library",
+                self._scan_progress,
+                tr(
+                    self.language,
+                    "scanning",
+                    path=self._scan_message,
+                ) + f"  [{self._scan_found}]",
+                language=self.language,
+            )
+
         if self.loading:
             return self.renderer.progress(
-                self._progress.stage,
+                "image",
                 self._progress.progress,
                 self._progress.message,
+                language=self.language,
+            )
+
+        if self.screen == self.STARTUP:
+            return self.renderer.progress(
+                "library",
+                1.0,
+                tr(self.language, "ready"),
+                language=self.language,
             )
 
         if self.screen == self.MAIN:
-            return self.renderer.main_menu(cols, rows, self.menu_index)
+            return self.renderer.main_menu(
+                cols,
+                rows,
+                self.menu_index,
+                image_count=len(self.entries),
+                language=self.language,
+                palette=self.palette,
+            )
 
         if self.screen == self.OPTIONS:
             return self.renderer.options_menu(
                 cols,
                 rows,
                 self.options_index,
-                self.quality,
-                self.display_mode,
-                self.palette,
+                quality=self.quality,
+                display_mode=self.display_mode,
+                palette=self.palette,
+                recursive_scan=self.recursive_scan,
+                touch_controls=self.touch_controls,
+                language=self.language,
+                color_depth=self.color_depth,
+                terminal_font=self.config.terminal_font,
+                image_count=len(self.entries),
+            )
+
+        if self.screen == self.BROWSER:
+            return self.renderer.browser(
+                cols,
+                rows,
+                self.entries,
+                self.index,
+                language=self.language,
             )
 
         return self.renderer.frame(
@@ -154,78 +410,22 @@ class ImageApp:
             self.quality,
             self.status,
             display_mode=self.display_mode,
-            browser=self.screen == self.BROWSER,
-            browser_entries=self.entries,
+            language=self.language,
             browser_index=self.index,
-            help_overlay=self.help_overlay,
+            zoom=self.zoom,
+            pan_x=self.pan_x,
+            pan_y=self.pan_y,
             info_overlay=self.info_overlay,
+            help_overlay=self.help_overlay,
         )
-
-    def _start_load(self, path: Path) -> None:
-        if self.loading:
-            return
-
-        self.loading = True
-        self.status = f"Loading {path.name}..."
-        self._progress = LoadEvent("open", 0.0, "Opening image...")
-        cells = (terminal_size().columns, terminal_size().lines)
-
-        def worker() -> None:
-            try:
-                loaded = self.loader.load(
-                    path,
-                    self.quality,
-                    cells,
-                    self.load_queue.put,
-                )
-                self.load_queue.put(LoadedResult(loaded, None))
-            except Exception as exc:
-                self.load_queue.put(LoadedResult(None, exc))
-
-        threading.Thread(
-            target=worker,
-            name="image-loader",
-            daemon=True,
-        ).start()
-
-    def _drain_load(self) -> None:
-        while True:
-            try:
-                item = self.load_queue.get_nowait()
-            except queue.Empty:
-                return
-
-            if isinstance(item, LoadEvent):
-                self._progress = item
-                continue
-
-            self.loading = False
-            if item.error:
-                self.status = f"Load error: {item.error}"
-                self.screen = self.VIEWER
-                continue
-
-            self.current = item.image
-            self.status = f"Loaded {self.current.path.name}"
-            self.entries = list_images(self.current.path.parent)
-            self.current_dir = self.current.path.parent
-            self.screen = self.VIEWER
-
-            try:
-                self.index = self.entries.index(self.current.path)
-            except ValueError:
-                self.index = 0
 
     def _read_key_with_timeout(self, term, timeout: float) -> str:
         if not term.enabled:
             return "q"
-
         ready, _, _ = select.select([term.fd], [], [], timeout)
         return term.read_key() if ready else ""
 
     def _handle_key(self, key: str) -> None:
-        self.status = ""
-
         if key.startswith("MOUSE:PRESS:"):
             self._handle_mouse(key)
             return
@@ -260,22 +460,43 @@ class ImageApp:
             self._handle_browser_key(key)
             return
 
-        if key in {"a", "A"} and not self.loading:
+        if key in {"a", "A"}:
             self.display_mode = DisplayMode.next(self.display_mode)
-            self.status = f"Display mode: {self.display_mode.label}"
+            self.status = self.display_mode.label
             return
 
-        if key in {"p", "P"} and not self.loading:
+        if key in {"p", "P"}:
             self.palette = Palette.next(self.palette)
             self.config.apply_palette(self.palette)
-            self.status = f"Palette: {self.palette.label}"
+            self.status = self.palette.label
             return
 
-        if key in {"r", "R"} and not self.loading:
+        if key in {"+", "="}:
+            self._zoom(1)
+            return
+
+        if key in {"-", "_"}:
+            self._zoom(-1)
+            return
+
+        if key == "0":
+            self._fit()
+            return
+
+        if self.zoom > 1.0:
+            if key == "LEFT":
+                self.pan_x = max(-1.0, self.pan_x - 0.15)
+            elif key == "RIGHT":
+                self.pan_x = min(1.0, self.pan_x + 0.15)
+            elif key == "UP":
+                self.pan_y = max(-1.0, self.pan_y - 0.15)
+            elif key == "DOWN":
+                self.pan_y = min(1.0, self.pan_y + 0.15)
+            return
+
+        if key in {"r", "R"}:
             self.quality = Quality.next(self.quality)
-            self.status = f"Quality: {self.quality.label}"
-            if self.current is not None:
-                self._start_load(self.current.path)
+            self._start_load(self.current.path) if self.current else None
             return
 
         if key in {"o", "O"}:
@@ -285,9 +506,9 @@ class ImageApp:
         if self.current is None or self.loading:
             return
 
-        if key == "RIGHT":
+        if key in {"RIGHT", "n", "N", " "}:
             self._step_image(1)
-        elif key == "LEFT":
+        elif key in {"LEFT", "b", "B"}:
             self._step_image(-1)
 
     def _handle_main_key(self, key: str) -> None:
@@ -320,50 +541,90 @@ class ImageApp:
             return
 
         if key == "UP":
-            self.options_index = (self.options_index - 1) % 4
-        elif key == "DOWN":
-            self.options_index = (self.options_index + 1) % 4
-        elif key in {"LEFT", "RIGHT", "\n", "\r"}:
-            if self.options_index == 0:
-                self.quality = (
-                    Quality.next(self.quality)
-                    if key != "LEFT"
-                    else list(Quality)[
-                        (list(Quality).index(self.quality) - 1) % len(Quality)
-                    ]
-                )
-                self.status = f"Quality: {self.quality.label}"
-            elif self.options_index == 1:
-                self.display_mode = (
-                    DisplayMode.next(self.display_mode)
-                    if key != "LEFT"
-                    else list(DisplayMode)[
-                        (list(DisplayMode).index(self.display_mode) - 1) % len(DisplayMode)
-                    ]
-                )
-                self.status = f"Display mode: {self.display_mode.label}"
-            elif self.options_index == 2:
-                self.palette = (
-                    Palette.next(self.palette)
-                    if key != "LEFT"
-                    else list(Palette)[
-                        (list(Palette).index(self.palette) - 1) % len(Palette)
-                    ]
-                )
-                self.config.apply_palette(self.palette)
-                self.status = f"Palette: {self.palette.label}"
-            elif self.options_index == 3:
-                self._go_main()
+            self.options_index = (self.options_index - 1) % 9
+            return
+        if key == "DOWN":
+            self.options_index = (self.options_index + 1) % 9
+            return
+
+        if key not in {"LEFT", "RIGHT", "\n", "\r", " "}:
+            return
+
+        direction = -1 if key == "LEFT" else 1
+
+        if self.options_index == 0:
+            self.quality = self._cycle(Quality, self.quality, direction)
+            self.status = f"{tr(self.language, 'image_quality')}: {self.quality.label}"
+
+        elif self.options_index == 1:
+            self.display_mode = self._cycle(
+                DisplayMode,
+                self.display_mode,
+                direction,
+            )
+            self.status = f"{tr(self.language, 'display_mode')}: {self.display_mode.label}"
+
+        elif self.options_index == 2:
+            self.palette = self._cycle(Palette, self.palette, direction)
+            self.config.apply_palette(self.palette)
+            self.status = f"{tr(self.language, 'color_palette')}: {self.palette.label}"
+
+        elif self.options_index == 3:
+            self.color_depth = self._cycle(ColorDepth, self.color_depth, direction)
+            self.config.color_depth = self.color_depth
+            self.renderer = Renderer(self.config)
+            self.status = f"{tr(self.language, 'color_depth')}: {self.color_depth.label}"
+
+        elif self.options_index == 4:
+            self.recursive_scan = not self.recursive_scan
+            self.status = f"{tr(self.language, 'recursive_scan')}: {tr(self.language, 'on') if self.recursive_scan else tr(self.language, 'off')}"
+            self._start_scan()
+
+        elif self.options_index == 5:
+            self.touch_controls = not self.touch_controls
+            self.config.touch_controls = self.touch_controls
+            self.status = "Touch setting will apply next launch."
+
+        elif self.options_index == 6:
+            self.language = self._cycle(Language, self.language, direction)
+            self.config.language = self.language
+            self.status = self.language.label
+
+        elif self.options_index == 7:
+            self._reset_settings()
+
+        elif self.options_index == 8:
+            self._go_main()
+
+    @staticmethod
+    def _cycle(enum_type, current, direction):
+        values = list(enum_type)
+        index = values.index(current)
+        return values[(index + direction) % len(values)]
+
+    def _reset_settings(self) -> None:
+        self.quality = Quality.ULTRA
+        self.display_mode = DisplayMode.FULL_BLOCK
+        self.palette = Palette.LIGHT
+        self.color_depth = ColorDepth.AUTO
+        self.language = Language.ENGLISH
+        self.recursive_scan = True
+        self.touch_controls = True
+        self.config.color_depth = self.color_depth
+        self.config.language = self.language
+        self.config.recursive_scan = self.recursive_scan
+        self.config.touch_controls = self.touch_controls
+        self.config.terminal_font = ""
+        self.config.apply_palette(self.palette)
+        self.renderer = Renderer(self.config)
+        self.status = tr(self.language, "settings_saved")
 
     def _handle_browser_key(self, key: str) -> None:
         if key == "UP":
             self.index = max(0, self.index - 1)
         elif key == "DOWN":
-            self.index = min(
-                max(0, len(self.entries) - 1),
-                self.index + 1,
-            )
-        elif key in {"\n", "\r", "RIGHT"} and self.entries:
+            self.index = min(max(0, len(self.entries) - 1), self.index + 1)
+        elif key in {"ENTER", "\n", "\r", "RIGHT"} and self.entries:
             self._start_load(self.entries[self.index])
 
     def _handle_mouse(self, key: str) -> None:
@@ -372,9 +633,8 @@ class ImageApp:
             return
 
         try:
-            _, _, _, x_text, y_text = parts
-            x = int(x_text)
-            y = int(y_text)
+            x = int(parts[3])
+            y = int(parts[4])
         except ValueError:
             return
 
@@ -389,65 +649,57 @@ class ImageApp:
             return
 
         if self.screen == self.OPTIONS:
-            first_row = max(6, rows // 2 - 4)
-            left = max(2, (cols - min(68, max(32, cols - 10))) // 2)
-            panel_w = min(68, max(32, cols - 10))
-            if left <= x <= left + panel_w:
-                for i in range(4):
-                    row = first_row + i * 2
-                    if row <= y <= row + 1:
-                        self.options_index = i
-                        if i == 3:
-                            self._go_main()
-                        else:
-                            self._change_option(1)
-                        return
+            hit = self.renderer.options_menu_hit(x, y, cols, rows)
+            if hit is not None:
+                self.options_index = hit
+                self._handle_options_key("\n")
             return
 
         if self.screen == self.BROWSER:
-            visible = max(1, rows - 4 - 2)
-            start = max(
-                0,
-                min(
-                    self.index - visible // 2,
-                    max(0, len(self.entries) - visible),
-                ),
+            hit = self.renderer.browser_hit(
+                x,
+                y,
+                cols,
+                rows,
+                len(self.entries),
+                self.index,
             )
-            clicked_row = y - 6
-            if clicked_row >= 0:
-                idx = start + clicked_row
-                if 0 <= idx < len(self.entries):
-                    self.index = idx
-                    self._start_load(self.entries[idx])
+            if hit is not None:
+                if hit < 0:
+                    self._go_main()
+                elif 0 <= hit < len(self.entries):
+                    self.index = hit
+                    self._start_load(self.entries[hit])
+            return
 
-    def _change_option(self, direction: int) -> None:
-        if self.options_index == 0:
-            values = list(Quality)
-            self.quality = values[
-                (values.index(self.quality) + direction) % len(values)
-            ]
-            self.status = f"Quality: {self.quality.label}"
-        elif self.options_index == 1:
-            values = list(DisplayMode)
-            self.display_mode = values[
-                (values.index(self.display_mode) + direction) % len(values)
-            ]
-            self.status = f"Display mode: {self.display_mode.label}"
-        elif self.options_index == 2:
-            values = list(Palette)
-            self.palette = values[
-                (values.index(self.palette) + direction) % len(values)
-            ]
-            self.config.apply_palette(self.palette)
-            self.status = f"Palette: {self.palette.label}"
+        if self.screen == self.VIEWER:
+            action = self.renderer.viewer_hit(x, y, cols, rows)
+            if action == "prev":
+                self._step_image(-1)
+            elif action == "next":
+                self._step_image(1)
+            elif action == "browse":
+                self._open_browser()
+            elif action == "fit":
+                self._fit()
+            elif action == "info":
+                self.info_overlay = not self.info_overlay
+                self.help_overlay = False
+            elif action == "menu":
+                self._go_main()
+            elif action == "zoom_in":
+                self._zoom(1)
+            elif action == "zoom_out":
+                self._zoom(-1)
 
     def _open_browser(self) -> None:
         self.help_overlay = False
         self.info_overlay = False
-        self.entries = list_images(self.current_dir)
-
-        if self.entries:
-            self.index = min(self.index, len(self.entries) - 1)
+        self.entries = list_images(
+            self.current_dir,
+            recursive=self.recursive_scan,
+        )
+        self._sync_index()
         self.screen = self.BROWSER
 
     def _go_main(self) -> None:
@@ -463,6 +715,26 @@ class ImageApp:
             return
         self.index = (self.index + delta) % len(self.entries)
         self._start_load(self.entries[self.index])
+
+    def _zoom(self, direction: int) -> None:
+        steps = [1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0]
+        index = steps.index(self.zoom) if self.zoom in steps else 0
+        index = max(0, min(len(steps) - 1, index + direction))
+        self.zoom = steps[index]
+        if self.zoom == 1.0:
+            self.pan_x = 0.0
+            self.pan_y = 0.0
+        self.status = tr(
+            self.language,
+            "fit_screen" if self.zoom == 1.0 else "zoom",
+            value=f"{self.zoom:g}",
+        )
+
+    def _fit(self) -> None:
+        self.zoom = 1.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
+        self.status = tr(self.language, "fit_screen")
 
 
 def main(path: str | None = None) -> None:
