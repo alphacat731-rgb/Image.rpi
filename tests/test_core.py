@@ -9,7 +9,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from imagerpi.config import AppConfig, Quality
+from imagerpi.config import AppConfig, DisplayMode, Palette, Quality
 from imagerpi.loader import ImageLoader, list_images
 
 
@@ -17,6 +17,12 @@ class CoreTests(unittest.TestCase):
     def test_quality_cycles(self) -> None:
         self.assertIs(Quality.next(Quality.ULTRA), Quality.VERY_LOW)
         self.assertIs(Quality.next(Quality.HIGH), Quality.VERY_HIGH)
+
+    def test_rectangle_mode_is_default_and_palettes_are_expanded(self) -> None:
+        config = AppConfig()
+        self.assertIs(config.default_display_mode, DisplayMode.FULL_BLOCK)
+        self.assertEqual(len(list(Palette)), 24)
+        self.assertIn("accent", config.apply_palette.__annotations__ if hasattr(config.apply_palette, "__annotations__") else {})
 
     def test_quality_changes_target_pixels(self) -> None:
         loader = ImageLoader(AppConfig())
