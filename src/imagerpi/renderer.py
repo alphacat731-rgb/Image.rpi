@@ -107,11 +107,7 @@ class Renderer:
             + meta[: max(1, cols - 2)]
         )
 
-        button_w = min(56, max(30, cols - 10))
-        button_h = 3
-        gap = 1
-        first_row = max(title_row + 5, rows // 2 - 4)
-        left = max(2, center - button_w // 2)
+        left, first_row, button_w, button_h, gap = self._main_menu_geometry(cols, rows)
 
         for i, item in enumerate(items):
             row = first_row + i * (button_h + gap)
@@ -169,13 +165,18 @@ class Renderer:
         out = StringIO()
         self._clean_frame(out)
 
-        center = cols // 2
+        center = max(1, cols // 2)
         title = tr(language, "options")
-        title_row = max(2, rows // 2 - 11)
+        title_row = 2
+
         out.write(
             move(title_row, max(1, center - len(title) // 2))
-            + self._style(self.config.foreground, self.config.background, bold=True)
-            + title
+            + self._style(
+                self.config.foreground,
+                self.config.background,
+                bold=True,
+            )
+            + title.upper()
         )
 
         items = [
@@ -183,19 +184,27 @@ class Renderer:
             (tr(language, "display_mode"), display_mode.label),
             (tr(language, "color_palette"), palette.label),
             (tr(language, "color_depth"), color_depth.label),
-            (tr(language, "recursive_scan"), tr(language, "on") if recursive_scan else tr(language, "off")),
-            (tr(language, "touch_controls"), tr(language, "on") if touch_controls else tr(language, "off")),
+            (
+                tr(language, "recursive_scan"),
+                tr(language, "on") if recursive_scan else tr(language, "off"),
+            ),
+            (
+                tr(language, "touch_controls"),
+                tr(language, "on") if touch_controls else tr(language, "off"),
+            ),
             (tr(language, "language"), language.label),
             (tr(language, "font"), terminal_font or "Terminal default"),
             (tr(language, "back"), ""),
         ]
 
-        panel_w = min(76, max(38, cols - 8))
+        panel_w = min(78, max(38, cols - 8))
         left = max(2, center - panel_w // 2)
-        first_row = max(title_row + 3, 4)
+        first_row = 4
 
-        visible_height = max(5, rows - first_row - 5)
-        max_items = max(4, visible_height // 2)
+        preview_height = 4
+        footer_height = 1
+        available = max(1, rows - first_row - preview_height - footer_height)
+        max_items = max(1, min(len(items), available))
         window_start = max(
             0,
             min(
@@ -206,62 +215,70 @@ class Renderer:
 
         for display_i in range(max_items):
             i = window_start + display_i
-            if i >= len(items):
-                break
-
-            row = first_row + display_i * 2
+            row = first_row + display_i
             name, value = items[i]
             active = i == selected
+
             bg = self.config.selection if active else self.config.panel
             fg = (255, 255, 255) if active else self.config.foreground
+            border = self.config.accent if active else self.config.border
             marker = "▸ " if active else "  "
             value_text = f"  {value}" if value else ""
-
             label = f"{marker}{name}{value_text}"
+
             if len(label) > panel_w - 2:
-                label = label[: panel_w - 3] + "…"
-            label = label.ljust(panel_w - 1)
+                label = label[:panel_w - 3] + "…"
+            label = label.ljust(panel_w - 2)
 
             out.write(
                 move(row, left)
-                + self._style(
-                    self.config.accent if active else self.config.border,
-                    bg,
-                )
+                + self._style(border, bg)
                 + "│"
                 + self._style(fg, bg, bold=active)
                 + label
                 + "│"
             )
+
+        if window_start > 0:
             out.write(
-                move(row + 1, left)
-                + self._style(
-                    self.config.accent if active else self.config.border,
-                    self.config.background,
-                )
-                + "╰" + "─" * (panel_w - 2) + "╯"
+                move(first_row, left + panel_w - 3)
+                + self._style(self.config.accent, self.config.panel, bold=True)
+                + "↑"
+            )
+        if window_start + max_items < len(items):
+            out.write(
+                move(first_row + max_items - 1, left + panel_w - 3)
+                + self._style(self.config.accent, self.config.panel, bold=True)
+                + "↓"
             )
 
-        preview_row = min(rows - 5, first_row + max_items * 2 + 1)
-        preview_title = tr(language, "palette_preview")
+        preview_row = min(rows - 5, first_row + max_items + 1)
         out.write(
             move(preview_row, left)
-            + self._style(self.config.foreground, self.config.background, bold=True)
-            + preview_title
+            + self._style(
+                self.config.foreground,
+                self.config.background,
+                bold=True,
+            )
+            + tr(language, "palette_preview")
         )
         self._palette_demo(out, preview_row + 1, left, panel_w)
 
+        depth_text = self._color_depth_short(language)
         term_text = tr(language, "terminal", cols=cols, rows=rows)
         count_text = tr(language, "image_count", count=image_count)
-        depth_text = self._color_depth_short(language)
         meta = f"{term_text}   •   {count_text}   •   {depth_text}"
         out.write(
-            move(min(rows - 3, preview_row + 4), left)
+            move(min(rows - 3, preview_row + 3), left)
             + self._style(self.config.muted, self.config.background)
             + meta[:panel_w]
         )
 
-        hint = f"↑ ↓ {tr(language, 'navigate')}   ← → {tr(language, 'select')}   Esc {tr(language, 'back_hint')}"
+        hint = (
+            f"↑ ↓ {tr(language, 'navigate')}   "
+            f"← → {tr(language, 'select')}   "
+            f"Esc {tr(language, 'back_hint')}"
+        )
         out.write(
             move(rows - 1, max(1, center - len(hint) // 2))
             + self._style(self.config.muted, self.config.background)
@@ -270,6 +287,7 @@ class Renderer:
         out.write(RESET)
         return out.getvalue()
 
+
     def browser(
         self,
         cols: int,
@@ -277,6 +295,7 @@ class Renderer:
         entries: list[Path],
         selected: int,
         language: Language = Language.ENGLISH,
+        root: Path | None = None,
     ) -> str:
         out = StringIO()
         self._clean_frame(out)
@@ -318,7 +337,10 @@ class Renderer:
                 continue
 
             entry = entries[idx]
-            relative = entry.name
+            try:
+                relative = str(entry.relative_to(root)) if root else entry.name
+            except ValueError:
+                relative = entry.name
             active = idx == selected
             bg = self.config.selection if active else self.config.panel
             fg = (255, 255, 255) if active else self.config.foreground
@@ -334,6 +356,23 @@ class Renderer:
                 + self._style(fg, bg, bold=active)
                 + text
             )
+
+        if entries and len(entries) > visible:
+            track_h = max(1, body_bottom - body_top + 1)
+            thumb_h = max(1, track_h * visible // len(entries))
+            thumb_y = body_top + (track_h - thumb_h) * start // max(1, len(entries) - visible)
+            out.write(
+                move(body_top, min(cols - 2, left + panel_w + 1))
+                + self._style(self.config.border, self.config.background)
+                + "│"
+            )
+            for bar_row in range(body_top, body_bottom + 1):
+                if thumb_y <= bar_row < thumb_y + thumb_h:
+                    out.write(
+                        move(bar_row, min(cols - 2, left + panel_w + 1))
+                        + self._style(self.config.accent, self.config.background)
+                        + "█"
+                    )
 
         if not entries:
             message = tr(language, "no_images")
@@ -362,6 +401,7 @@ class Renderer:
         language: Language = Language.ENGLISH,
         browser_entries: list[Path] | None = None,
         browser_index: int = 0,
+        image_count: int = 0,
         zoom: float = 1.0,
         pan_x: float = 0.0,
         pan_y: float = 0.0,
@@ -372,14 +412,20 @@ class Renderer:
         cols, rows = max(size.columns, 40), max(size.lines, 12)
 
         if browser_entries is not None:
-            return self.browser(cols, rows, browser_entries, browser_index, language)
+            return self.browser(
+                cols,
+                rows,
+                browser_entries,
+                browser_index,
+                language,
+            )
 
         out = StringIO()
         self._clean_frame(out)
 
         filename = image.path.name if image else "IMAGE.RPI"
         if image:
-            index_text = f"{browser_index + 1}/{max(1, browser_index + 1)}"
+            index_text = f"{browser_index + 1}/{max(1, image_count)}"
             zoom_text = tr(language, "zoom", value=f"{zoom:g}")
             top = (
                 f" {tr(language, 'app_title')}  │  {filename}"
@@ -964,11 +1010,14 @@ class Renderer:
     @staticmethod
     def _main_menu_geometry(cols: int, rows: int) -> tuple[int, int, int, int, int]:
         center = max(1, cols // 2)
-        title_row = max(3, rows // 2 - 9)
+        title_row = max(2, rows // 2 - 8)
         button_w = min(56, max(30, cols - 10))
         button_h = 3 if rows >= 18 else 2
         gap = 1 if rows >= 18 else 0
-        first_row = max(title_row + 5, rows // 2 - 4)
+        total_height = 3 * button_h + 2 * gap
+        preferred_first = max(title_row + 5, rows // 2 - 4)
+        max_first = max(2, rows - 3 - total_height)
+        first_row = min(preferred_first, max_first)
         left = max(2, center - button_w // 2)
         return left, first_row, button_w, button_h, gap
 
