@@ -104,6 +104,29 @@ class CoreTests(unittest.TestCase):
                 self.assertLess(last_row, footer_row)
                 self.assertGreaterEqual(first_row, title_row + 4)
 
+    def test_overlay_escape_closes_overlay_before_menu(self) -> None:
+        from imagerpi.app import ImageApp
+
+        app = ImageApp.__new__(ImageApp)
+        app.help_overlay = True
+        app.info_overlay = False
+        app.screen = ImageApp.VIEWER
+        app.running = True
+        app._go_main = lambda: setattr(app, "screen", ImageApp.MAIN)
+        app._handle_key("ESC")
+
+        self.assertFalse(app.help_overlay)
+        self.assertEqual(app.screen, ImageApp.VIEWER)
+
+    def test_global_q_quits_from_any_screen(self) -> None:
+        from imagerpi.app import ImageApp
+
+        app = ImageApp.__new__(ImageApp)
+        app.screen = ImageApp.OPTIONS
+        app.running = True
+        app._handle_key("Q")
+        self.assertFalse(app.running)
+
     def test_viewer_has_menu_touch_target(self) -> None:
         from imagerpi.renderer import Renderer
 
