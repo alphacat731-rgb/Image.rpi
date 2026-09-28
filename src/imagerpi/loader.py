@@ -158,10 +158,15 @@ class ImageLoader:
                 else raw_size
             )
 
-            target = self._target_pixels(
+            target_oriented = self._target_pixels(
                 oriented_size,
                 quality,
                 terminal_cells,
+            )
+            target = (
+                (target_oriented[1], target_oriented[0])
+                if orientation in {5, 6, 7, 8}
+                else target_oriented
             )
 
             if is_large:
@@ -187,7 +192,7 @@ class ImageLoader:
                 source = source.copy()
 
             source = ImageOps.exif_transpose(source)
-            original_size = source.size
+            original_size = oriented_size
             frame = self._composite_white(source)
 
         event("decode", 1.0, "Image decoded")
