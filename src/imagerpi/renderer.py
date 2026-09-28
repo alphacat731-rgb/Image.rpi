@@ -408,8 +408,8 @@ class Renderer:
         )
 
         body_top = 4
-        toolbar_h = 3
-        body_bottom = rows - toolbar_h - 1
+        body_bottom = max(body_top, rows - 7)
+        toolbar_row = rows - 4
 
         if image:
             self._image(
@@ -437,7 +437,7 @@ class Renderer:
                 + status[: max(1, cols - 4)]
             )
 
-        self._toolbar(out, cols, rows, language, zoom, body_bottom)
+        self._toolbar(out, cols, rows, language, zoom, toolbar_row)
         if help_overlay:
             self._help_overlay(out, cols, rows, language)
         elif info_overlay and image:
@@ -527,6 +527,11 @@ class Renderer:
         view_w = max(8, cols - 2)
         view_h = max(2, bottom - top + 1)
 
+        if display_mode is DisplayMode.FULL_BLOCK:
+            source = self._view_source(image, view_w, view_h * 2, zoom, pan_x, pan_y)
+            self._render_rectangles(out, source, cols, top, bottom)
+            return
+
         if display_mode is DisplayMode.HALF_BLOCK:
             source = self._view_source(image, view_w, view_h * 2, zoom, pan_x, pan_y)
             self._render_half_block(out, source, cols, top, bottom)
@@ -597,6 +602,41 @@ class Renderer:
     def _luma(rgb: tuple[int, int, int]) -> int:
         r, g, b = rgb
         return max(0, min(255, int(0.2126 * r + 0.7152 * g + 0.0722 * b)))
+
+    def _render_rectangles(
+        self,
+        out: StringIO,
+        source: Image.Image,
+        cols: int,
+        top: int,
+        bottom: int,
+    ) -> None:
+        px = source.load()
+        width, height = source.size
+        xoff = max(1, (cols - width) // 2)
+
+        for y in range(0, height, 2):
+            row = top + y // 2
+            if row > bottom:
+                break
+
+            out.write(move(row, xoff))
+            current_fg = None
+
+            for x in range(width):
+                a = self._rgb(px[x, y])
+                b = self._rgb(px[x, y + 1]) if y + 1 < height else a
+                rgb = tuple((a[i] + b[i]) // 2 for i in range(3))
+                if rgb != current_fg:
+                    out.write(self._fg(rgb))
+                    current_fg = rgb
+                out.write("█")
+
+            out.write(
+                RESET
+                + self._bg(self.config.background)
+                + self._fg(self.config.foreground)
+            )
 
     def _render_half_block(
         self,
@@ -802,51 +842,66 @@ class Renderer:
         zoom: float,
         row: int,
     ) -> None:
-        buttons = [
-            tr(language, "previous"),
-            tr(language, "browse"),
-            tr(language, "fit"),
-            tr(language, "info"),
-            tr(language, "next"),
-        ]
+        if cols < 46:
+            buttons = [
+                ("prev", "<"),
+                ("browse", "B"),
+                ("fit", "Fit"),
+                ("info", "I"),
+                ("next", ">"),
+            ]
+        else:
+            buttons = [
+                ("prev", "<"),
+                ("browse", tr(language, "browse")),
+                ("fit", tr(language, "fit")),
+                ("info", tr(language, "info")),
+                ("next", ">"),
+            ]
+
         gap = 1
-        total = sum(len(v) + 4 for v in buttons) + gap * (len(buttons) - 1)
+        widths = [max(5, len(label) + 4) for _, label in buttons]
+        total = sum(widths) + gap * (len(buttons) - 1)
+        if total > cols - 2:
+            buttons = [
+                ("prev", "<"),
+                ("browse", "B"),
+                ("fit", "Fit"),
+                ("info", "I"),
+                ("next", ">"),
+            ]
+            widths = [5, 5, 7, 5, 5]
+            total = sum(widths) + gap * 4
+
         left = max(1, (cols - total) // 2)
-        x = left
 
         out.write(
-            move(row + 1)
+            move(row)
             + self._style(self.config.border, self.config.background)
             + "─" * cols
         )
 
-        for i, button in enumerate(buttons):
-            w = len(button) + 4
-            bg = self.config.panel
-            fg = self.config.foreground
+        x = left
+        for (_, label), width in zip(buttons, widths):
+            out.write(
+                move(row + 1, x)
+                + self._style(self.config.border, self.config.panel)
+                + "╭" + "─" * (width - 2) + "╮"
+            )
             out.write(
                 move(row + 2, x)
-                + self._style(self.config.border, bg)
-                + "╭" + "─" * (w - 2) + "╮"
+                + self._style(self.config.foreground, self.config.panel, bold=True)
+                + "│" + label.center(width - 2) + "│"
             )
-            out.write(
-                move(row + 3, x)
-                + self._style(fg, bg, bold=True)
-                + "│ " + button.center(w - 4) + " │"
-            )
-            out.write(
-                move(row + 4, x)
-                + self._style(self.config.border, bg)
-                + "╰" + "─" * (w - 2) + "╯"
-            )
-            x += w + gap
+            x += width + gap
 
-        zoom_text = f"{zoom:g}x"
-        if cols > total + len(zoom_text) + 4:
+        zoom_text = tr(language, "zoom", value=f"{zoom:g}")
+        available = max(0, left - 3)
+        if available >= len(zoom_text):
             out.write(
-                move(row + 4, 2)
+                move(row + 2, 2)
                 + self._style(self.config.muted, self.config.background)
-                + zoom_text
+                + zoom_text[:available]
             )
 
     def _palette_demo(self, out: StringIO, row: int, left: int, width: int) -> None:
@@ -905,6 +960,121 @@ class Renderer:
             + self._style(self.config.muted, self.config.background)
             + message
         )
+
+    @staticmethod
+    def _main_menu_geometry(cols: int, rows: int) -> tuple[int, int, int, int, int]:
+        center = max(1, cols // 2)
+        title_row = max(3, rows // 2 - 9)
+        button_w = min(56, max(30, cols - 10))
+        button_h = 3 if rows >= 18 else 2
+        gap = 1 if rows >= 18 else 0
+        first_row = max(title_row + 5, rows // 2 - 4)
+        left = max(2, center - button_w // 2)
+        return left, first_row, button_w, button_h, gap
+
+    @staticmethod
+    def main_menu_hit(x: int, y: int, cols: int, rows: int) -> int | None:
+        left, first_row, button_w, button_h, gap = Renderer._main_menu_geometry(cols, rows)
+        if not (left <= x <= left + button_w):
+            return None
+        for i in range(3):
+            row = first_row + i * (button_h + gap)
+            if row <= y <= row + button_h - 1:
+                return i
+        return None
+
+    @staticmethod
+    def options_menu_hit(
+        x: int,
+        y: int,
+        cols: int,
+        rows: int,
+        selected: int,
+        item_count: int = 9,
+    ) -> int | None:
+        title_row = max(2, rows // 2 - 11)
+        panel_w = min(76, max(38, cols - 8))
+        left = max(2, cols // 2 - panel_w // 2)
+        first_row = max(title_row + 3, 4)
+        visible_height = max(5, rows - first_row - 5)
+        max_items = max(4, visible_height // 2)
+        window_start = max(0, min(selected - max_items // 2, max(0, item_count - max_items)))
+
+        if not (left <= x <= left + panel_w):
+            return None
+
+        display_i = (y - first_row) // 2
+        if display_i < 0 or display_i >= max_items:
+            return None
+
+        row = first_row + display_i * 2
+        if row <= y <= row + 1:
+            index = window_start + display_i
+            return index if index < item_count else None
+        return None
+
+    @staticmethod
+    def browser_hit(
+        x: int,
+        y: int,
+        cols: int,
+        rows: int,
+        count: int,
+        selected: int,
+    ) -> int | None:
+        body_top = 5
+        body_bottom = rows - 5
+        if y < body_top or y > body_bottom:
+            return None
+        visible = max(1, body_bottom - body_top + 1)
+        start = max(0, min(selected - visible // 2, max(0, count - visible)))
+        index = start + (y - body_top)
+        return index if 0 <= index < count else None
+
+    @staticmethod
+    def viewer_hit(x: int, y: int, cols: int, rows: int) -> str | None:
+        toolbar_row = rows - 4
+        if y < toolbar_row + 1 or y > toolbar_row + 2:
+            return None
+
+        if cols < 46:
+            labels = [
+                ("prev", "<"),
+                ("browse", "B"),
+                ("fit", "Fit"),
+                ("info", "I"),
+                ("next", ">"),
+            ]
+        else:
+            labels = [
+                ("prev", "<"),
+                ("browse", "Browse"),
+                ("fit", "Fit"),
+                ("info", "Info"),
+                ("next", ">"),
+            ]
+
+        gap = 1
+        widths = [max(5, len(label) + 4) for _, label in labels]
+        total = sum(widths) + gap * 4
+        if total > cols - 2:
+            labels = [
+                ("prev", "<"),
+                ("browse", "B"),
+                ("fit", "Fit"),
+                ("info", "I"),
+                ("next", ">"),
+            ]
+            widths = [5, 5, 7, 5, 5]
+            total = sum(widths) + gap * 4
+
+        left = max(1, (cols - total) // 2)
+        current_x = left
+        for (action, _), width in zip(labels, widths):
+            if current_x <= x < current_x + width:
+                return action
+            current_x += width + gap
+        return None
 
     def _help_overlay(self, out: StringIO, cols: int, rows: int, language: Language) -> None:
         lines = [
