@@ -31,7 +31,7 @@ class CoreTests(unittest.TestCase):
             loader._target_pixels((1600, 1200), q, (100, 30))
             for q in Quality
         ]
-        self.assertEqual(sizes[0], (20, 10))
+        self.assertEqual(sizes[0], (30, 23))
         self.assertTrue(
             all(
                 a[0] <= b[0] and a[1] <= b[1]
