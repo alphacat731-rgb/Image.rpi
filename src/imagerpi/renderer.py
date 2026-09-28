@@ -288,6 +288,8 @@ class Renderer:
         chars = {
             DisplayMode.FULL_BLOCK: lambda l: "█",
             DisplayMode.LOWER_BLOCK: lambda l: "▄",
+            DisplayMode.LEFT_BLOCK: lambda l: "▌",
+            DisplayMode.RIGHT_BLOCK: lambda l: "▐",
             DisplayMode.DARK_SHADE: lambda l: "▓",
             DisplayMode.MEDIUM_SHADE: lambda l: "▒",
             DisplayMode.LIGHT_SHADE: lambda l: "░",
@@ -559,7 +561,7 @@ class Renderer:
             "ENTER  Open selected image",
             "Q  Quit",
             "",
-            "Display modes: blocks, shades, dots, braille and ASCII.",
+            "Display modes: blocks, vertical blocks, shades, dots, braille and ASCII.",
         ]
         left, top = self._overlay_box(
             out,
