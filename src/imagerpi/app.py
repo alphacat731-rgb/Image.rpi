@@ -646,7 +646,13 @@ class ImageApp:
             return
 
         if self.screen == self.OPTIONS:
-            hit = self.renderer.options_menu_hit(x, y, cols, rows)
+            hit = self.renderer.options_menu_hit(
+                x,
+                y,
+                cols,
+                rows,
+                self.options_index,
+            )
             if hit is not None:
                 self.options_index = hit
                 self._handle_options_key("\n")
