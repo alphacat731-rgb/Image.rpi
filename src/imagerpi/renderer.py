@@ -623,7 +623,7 @@ class Renderer:
 
         filename = image.path.name if image else "IMAGE.RPI"
         if image:
-                index_text = f"{browser_index + 1}/{max(1, image_count)}"
+            index_text = f"{browser_index + 1}/{max(1, image_count)}"
             zoom_text = tr(language, "zoom", value=f"{zoom:g}")
             top = (
                 f" {tr(language, 'app_title')}  │  {filename}"
