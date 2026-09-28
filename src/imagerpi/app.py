@@ -80,6 +80,7 @@ class ImageApp:
         self.zoom = 1.0
         self.pan_x = 0.0
         self.pan_y = 0.0
+        self._preserve_view_on_load = False
 
         self.help_overlay = False
         self.info_overlay = False
@@ -282,9 +283,13 @@ class ImageApp:
             self.current = item.image
             self.current_dir = self.current.path.parent
             self._sync_index()
-            self.zoom = 1.0
-            self.pan_x = 0.0
-            self.pan_y = 0.0
+
+            if not self._preserve_view_on_load:
+                self.zoom = 1.0
+                self.pan_x = 0.0
+                self.pan_y = 0.0
+            self._preserve_view_on_load = False
+
             self.screen = self.VIEWER
             self.status = f"{self.current.path.name}"
 
@@ -312,6 +317,7 @@ class ImageApp:
             and self.screen == self.VIEWER
             and not self.loading
         ):
+            self._preserve_view_on_load = True
             self._start_load(self.current.path)
 
     def _render_signature(self) -> tuple:
@@ -529,7 +535,9 @@ class ImageApp:
 
         if key in {"r", "R"}:
             self.quality = Quality.next(self.quality)
-            self._start_load(self.current.path) if self.current else None
+            if self.current is not None:
+                self._preserve_view_on_load = True
+                self._start_load(self.current.path)
             return
 
         if key in {"o", "O"}:
