@@ -46,15 +46,17 @@ class Language(str, Enum):
 
 class ColorDepth(str, Enum):
     AUTO = "auto"
-    TRUECOLOR = "truecolor"
+    ANSI16 = "ansi16"
     ANSI256 = "ansi256"
+    TRUECOLOR = "truecolor"
 
     @property
     def label(self) -> str:
         return {
             ColorDepth.AUTO: "Auto",
-            ColorDepth.TRUECOLOR: "Truecolor",
+            ColorDepth.ANSI16: "16 colors",
             ColorDepth.ANSI256: "256 colors",
+            ColorDepth.TRUECOLOR: "Truecolor",
         }[self]
 
     @classmethod
@@ -164,6 +166,9 @@ class Palette(str, Enum):
         values = list(cls)
         return values[(values.index(current) + 1) % len(values)]
 
+
+MAX_ZOOM = 8.0
+MAX_SOURCE_PIXELS = 4_000_000
 
 FONT_PRESETS = (
     "",
