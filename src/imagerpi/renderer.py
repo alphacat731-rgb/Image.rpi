@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from io import StringIO
 from pathlib import Path
 from typing import Callable
@@ -28,6 +29,9 @@ from .terminal import (
 class Renderer:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
+        self._view_cache: OrderedDict[tuple[int, int, int, float], Image.Image] = OrderedDict()
+        self._view_cache_limit = 6
+
         self.truecolor = (
             config.color_depth is ColorDepth.TRUECOLOR
             or (
@@ -796,16 +800,34 @@ class Renderer:
         target_h = max(1, target_h)
         zoom = max(1.0, min(8.0, zoom))
 
-        scale = min(target_w / image.width, target_h / image.height)
-        scaled_w = max(1, int(image.width * scale * zoom))
-        scaled_h = max(1, int(image.height * scale * zoom))
-
-        resized = image.resize(
-            (scaled_w, scaled_h),
-            Image.Resampling.LANCZOS,
+        cache_key = (
+            id(image),
+            target_w,
+            target_h,
+            round(zoom, 3),
         )
+        resized = self._view_cache.get(cache_key)
 
+        if resized is None:
+            scale = min(target_w / image.width, target_h / image.height)
+            scaled_w = max(1, int(image.width * scale * zoom))
+            scaled_h = max(1, int(image.height * scale * zoom))
+
+            resized = image.resize(
+                (scaled_w, scaled_h),
+                Image.Resampling.LANCZOS,
+            )
+
+            self._view_cache[cache_key] = resized
+            self._view_cache.move_to_end(cache_key)
+            while len(self._view_cache) > self._view_cache_limit:
+                self._view_cache.popitem(last=False)
+        else:
+            self._view_cache.move_to_end(cache_key)
+
+        scaled_w, scaled_h = resized.size
         canvas = Image.new("RGB", (target_w, target_h), self.config.background)
+
         if zoom <= 1.0001:
             x = (target_w - scaled_w) // 2
             y = (target_h - scaled_h) // 2
@@ -834,6 +856,7 @@ class Renderer:
         dst_y = (target_h - crop_h) // 2
         canvas.paste(crop, (dst_x, dst_y))
         return canvas
+
 
     @staticmethod
     def _rgb(pixel: tuple[int, ...]) -> tuple[int, int, int]:
