@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 import os
+from pathlib import Path
 
 
 class Quality(IntEnum):
