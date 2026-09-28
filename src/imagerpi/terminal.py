@@ -73,6 +73,42 @@ def rgb_bg(
     return rgb_bg_256(rgb)
 
 
+ANSI16_RGB = (
+    (0, 0, 0),
+    (128, 0, 0),
+    (0, 128, 0),
+    (128, 128, 0),
+    (0, 0, 128),
+    (128, 0, 128),
+    (0, 128, 128),
+    (192, 192, 192),
+    (128, 128, 128),
+    (255, 0, 0),
+    (0, 255, 0),
+    (255, 255, 0),
+    (0, 0, 255),
+    (255, 0, 255),
+    (0, 255, 255),
+    (255, 255, 255),
+)
+
+
+def _ansi16_index(rgb: tuple[int, int, int]) -> int:
+    def distance(c):
+        return sum((int(rgb[i]) - c[i]) ** 2 for i in range(3))
+    return min(range(len(ANSI16_RGB)), key=lambda i: distance(ANSI16_RGB[i]))
+
+
+def rgb_fg_16(rgb: tuple[int, int, int]) -> str:
+    index = _ansi16_index(rgb)
+    return f"{ESC}{30 + index if index < 8 else 90 + index - 8}m"
+
+
+def rgb_bg_16(rgb: tuple[int, int, int]) -> str:
+    index = _ansi16_index(rgb)
+    return f"{ESC}{40 + index if index < 8 else 100 + index - 8}m"
+
+
 def rgb_fg_256(rgb: tuple[int, int, int]) -> str:
     return f"{ESC}38;5;{_ansi256_index(rgb)}m"
 
