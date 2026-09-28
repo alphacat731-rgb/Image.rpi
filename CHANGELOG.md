@@ -18,6 +18,11 @@
 - Options preview can no longer overlap the settings list on small terminals.
 - Application background is applied before clearing, keeping blank cells consistent with the selected palette.
 - Touch hitboxes no longer include the first cell outside their visible cards.
+- Overlay Esc now closes the overlay before leaving the viewer.
+- Browser Home/End navigation is wired up.
+- Recursive library-scan progress is kept monotonic.
+- Palette preview gradients are constrained to their panel width.
+- ANSI16 conversion is included for terminals without ANSI256/Truecolor support.
 
 ## 0.2.0
 
