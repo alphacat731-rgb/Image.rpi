@@ -107,7 +107,7 @@ class Renderer:
             + meta[: max(1, cols - 2)]
         )
 
-        left, first_row, button_w, button_h, gap = self._main_menu_geometry(cols, rows)
+        left = max(2, center - button_w // 2)
 
         for i, item in enumerate(items):
             row = first_row + i * (button_h + gap)
@@ -1024,7 +1024,7 @@ class Renderer:
         total_height = 3 * button_h + 2 * gap
 
         if compact:
-            first_row = 4
+            first_row = 5
         else:
             first_row = max(
                 title_row + 4,
@@ -1087,6 +1087,8 @@ class Renderer:
     ) -> int | None:
         body_top = 5
         body_bottom = rows - 5
+        if y == rows - 2:
+            return -1
         if y < body_top or y > body_bottom:
             return None
         visible = max(1, body_bottom - body_top + 1)
