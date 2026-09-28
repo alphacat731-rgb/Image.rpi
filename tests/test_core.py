@@ -13,6 +13,7 @@ from imagerpi.config import (
     AppConfig,
     ColorDepth,
     DisplayMode,
+    Language,
     Palette,
     Quality,
     MAX_SOURCE_PIXELS,
@@ -169,7 +170,7 @@ class CoreTests(unittest.TestCase):
             palette=Palette.LIGHT,
             recursive_scan=True,
             touch_controls=True,
-            language=__import__("imagerpi.config", fromlist=["Language"]).Language.ENGLISH,
+            language=Language.ENGLISH,
             color_depth=ColorDepth.AUTO,
             terminal_font="",
             image_count=3,
@@ -180,7 +181,6 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(browser)
 
     def test_zoomed_viewer_frame_renders(self) -> None:
-        from pathlib import Path
         from imagerpi.renderer import Renderer
         from imagerpi.loader import LoadedImage
 
