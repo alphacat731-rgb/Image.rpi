@@ -165,6 +165,15 @@ class Palette(str, Enum):
         return values[(values.index(current) + 1) % len(values)]
 
 
+FONT_PRESETS = (
+    "",
+    "DejaVu Sans Mono",
+    "Liberation Mono",
+    "Noto Sans Mono",
+    "Monospace",
+)
+
+
 PALETTE_COLORS: dict[Palette, dict[str, tuple[int, int, int]]] = {
     Palette.LIGHT: {"background": (255, 255, 255), "foreground": (20, 20, 24), "muted": (105, 105, 112), "panel": (244, 245, 247), "border": (215, 217, 222), "accent": (42, 90, 255), "selection": (25, 30, 45)},
     Palette.ARCTIC: {"background": (238, 248, 255), "foreground": (15, 35, 48), "muted": (75, 110, 125), "panel": (218, 238, 249), "border": (170, 210, 225), "accent": (0, 145, 190), "selection": (24, 82, 105)},
