@@ -65,9 +65,11 @@ class Renderer:
         return "".join(parts)
 
     def _clean_frame(self, out: StringIO) -> None:
-        out.write("\x1b[2J\x1b[H")
+        # Set the background before clearing so blank cells are painted with
+        # the selected application palette instead of the terminal's default.
         out.write(self._bg(self.config.background))
         out.write(self._fg(self.config.foreground))
+        out.write("\x1b[2J\x1b[H")
 
     def main_menu(
         self,
@@ -1152,7 +1154,7 @@ class Renderer:
     @staticmethod
     def main_menu_hit(x: int, y: int, cols: int, rows: int) -> int | None:
         left, _, first_row, button_w, button_h, gap = Renderer._main_menu_geometry(cols, rows)
-        if not (left <= x <= left + button_w):
+        if not (left <= x < left + button_w):
             return None
         for i in range(3):
             row = first_row + i * (button_h + gap)
@@ -1181,7 +1183,7 @@ class Renderer:
             min(selected - max_items // 2, max(0, item_count - max_items)),
         )
 
-        if not (left <= x <= left + panel_w):
+        if not (left <= x < left + panel_w):
             return None
         if y < first_row or y >= first_row + max_items:
             return None
