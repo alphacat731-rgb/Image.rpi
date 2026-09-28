@@ -758,6 +758,12 @@ class Renderer:
         out.write(RESET)
         return out.getvalue()
 
+    @staticmethod
+    def _quality_scale(quality: Quality) -> float:
+        # Quality is a rendering-resolution control, not just a decode hint.
+        return max(0.10, min(1.0, quality / 100.0))
+
+
     def _image(
         self,
         out: StringIO,
@@ -776,7 +782,7 @@ class Renderer:
 
         # Quality controls the effective terminal resolution. Very Low uses
         # a deliberately coarse grid, while Ultra can use the full grid.
-        q = max(0.10, min(1.0, quality / 100.0))
+        q = self._quality_scale(quality)
 
         full_target_h = view_h * 2
         effective_w = max(2, int(view_w * q))
