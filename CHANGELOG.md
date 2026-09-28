@@ -22,6 +22,7 @@
 - Touch hitboxes no longer include the first cell outside their visible cards.
 - Overlay Esc now closes the overlay before leaving the viewer.
 - Browser Home/End navigation is wired up.
+- User config initialization now imports pathlib correctly.
 - Recursive library-scan progress is kept monotonic.
 - Zoom and pan are preserved when the current image is reloaded for a terminal resize or quality change.
 - Scaled viewer images are cached so zoom/pan movement avoids repeating expensive resizes.
