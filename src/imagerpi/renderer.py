@@ -1118,29 +1118,34 @@ class Renderer:
         )
 
     @staticmethod
+    @staticmethod
     def _main_menu_geometry(
         cols: int,
         rows: int,
     ) -> tuple[int, int, int, int, int, int]:
         center = max(1, cols // 2)
-        compact = rows < 22
+        very_compact = rows < 14
+        compact = rows < 20
 
-        title_row = 1 if compact else 2
-        button_w = min(56, max(30, cols - 10))
-        button_h = 2 if compact else 3
-        gap = 0 if compact else 1
+        title_row = 1 if very_compact else 2
+        if very_compact:
+            button_w, button_h, gap = min(52, max(28, cols - 8)), 2, 0
+        elif compact:
+            button_w, button_h, gap = min(54, max(30, cols - 10)), 3, 0
+        else:
+            button_w, button_h, gap = min(58, max(32, cols - 12)), 4, 1
+
         total_height = 3 * button_h + 2 * gap
 
-        if compact:
-            first_row = 5
-        else:
-            first_row = max(
-                title_row + 4,
-                (rows - total_height) // 2,
-            )
+        # Keep a real footer row below the final button, even on tiny terminals.
+        footer_row = max(1, rows - 1)
+        desired = max(title_row + 4, (rows - total_height) // 2)
+        max_first = max(title_row + 4, footer_row - total_height - 1)
+        first_row = min(desired, max_first)
 
-        max_first = max(title_row + 4, rows - 3 - total_height)
-        first_row = min(first_row, max_first)
+        # In the tightest terminals, sacrifice vertical centering rather than
+        # letting the cards collide with the footer or title.
+        first_row = max(title_row + 4, min(first_row, rows - total_height - 2))
         left = max(2, center - button_w // 2)
         return left, title_row, first_row, button_w, button_h, gap
 
