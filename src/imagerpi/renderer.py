@@ -452,9 +452,25 @@ class Renderer:
                 + message
             )
 
+        # A real back button makes the browser comfortable on touchscreens.
+        back_w = min(30, max(18, cols - 12))
+        back_left = max(1, (cols - back_w) // 2)
+        back_row = rows - 3
+        out.write(
+            move(back_row, back_left)
+            + self._style(self.config.border, self.config.panel)
+            + "╭" + "─" * (back_w - 2) + "╮"
+        )
+        back_label = tr(language, "back")
+        out.write(
+            move(back_row + 1, back_left)
+            + self._style(self.config.foreground, self.config.panel, bold=True)
+            + "│  " + back_label.center(back_w - 6) + "  │"
+        )
+
         hint = f"↑ ↓ {tr(language, 'navigate')}   Enter {tr(language, 'open')}   Esc {tr(language, 'back_hint')}"
         out.write(
-            move(rows - 2, max(1, (cols - len(hint)) // 2))
+            move(rows - 1, max(1, (cols - len(hint)) // 2))
             + self._style(self.config.muted, self.config.background)
             + hint[: max(1, cols - 2)]
         )
@@ -495,10 +511,11 @@ class Renderer:
 
         filename = image.path.name if image else "IMAGE.RPI"
         if image:
-            index_text = f"{browser_index + 1}/{max(1, image_count)}"
+                index_text = f"{browser_index + 1}/{max(1, image_count)}"
             zoom_text = tr(language, "zoom", value=f"{zoom:g}")
             top = (
                 f" {tr(language, 'app_title')}  │  {filename}"
+                f"  │  {index_text}"
                 f"  │  {quality.label}  │  {display_mode.label}"
                 f"  │  {zoom_text}"
             )
@@ -1127,7 +1144,7 @@ class Renderer:
     ) -> tuple[int, int, int, int, int, int]:
         center = max(1, cols // 2)
         very_compact = rows < 14
-        compact = rows < 20
+        compact = rows < 22
 
         title_row = 1 if very_compact else 2
         if very_compact:
@@ -1202,7 +1219,7 @@ class Renderer:
     ) -> int | None:
         body_top = 5
         body_bottom = rows - 5
-        if y == rows - 2:
+        if y in {rows - 3, rows - 2}:
             return -1
         if y < body_top or y > body_bottom:
             return None
