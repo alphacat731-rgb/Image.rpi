@@ -346,35 +346,40 @@ class Renderer:
             )
 
         # Dedicated preview card. It shows the selected theme and actual color depth.
-        if wide:
-            preview_top = 4
-        else:
-            preview_top = top + max_items + 1
-
-        draw_preview = wide or (
-            reserve_preview > 0
-            and preview_top + 4 < rows - 1
-        )
-        preview_h = max(10, min(rows - 7, 16)) if draw_preview else 0
+        preview_top = 4 if wide else top + max_items + 1
+        available_preview_rows = max(0, rows - preview_top - 2)
+        draw_preview = wide or available_preview_rows >= 5
+        preview_h = min(10, available_preview_rows) if draw_preview else 0
         bottom_row = 0
-        if draw_preview:
+
+        if draw_preview and preview_h >= 5:
             out.write(
                 move(preview_top, preview_left)
                 + self._style(self.config.border, self.config.panel)
                 + "╭" + "─" * (preview_w - 2) + "╮"
             )
+
             preview_title = tr(language, "palette_preview")
             out.write(
                 move(preview_top + 1, preview_left)
-                + self._style(self.config.foreground, self.config.panel, bold=True)
+                + self._style(
+                    self.config.foreground,
+                    self.config.panel,
+                    bold=True,
+                )
                 + "│"
                 + preview_title.center(preview_w - 2)
                 + "│"
             )
+
             palette_line = f"  {palette.label}  "
             out.write(
                 move(preview_top + 2, preview_left)
-                + self._style(self.config.accent, self.config.panel, bold=True)
+                + self._style(
+                    self.config.accent,
+                    self.config.panel,
+                    bold=True,
+                )
                 + "│"
                 + palette_line.center(preview_w - 2)
                 + "│"
@@ -382,7 +387,7 @@ class Renderer:
 
             self._palette_demo(
                 out,
-                preview_top + 4,
+                preview_top + 3,
                 preview_left + 2,
                 preview_w - 4,
             )
@@ -392,19 +397,32 @@ class Renderer:
                 "image_colors",
                 count=self._color_count_short(),
             )
-            lines = [
-                color_count,
-                f"{tr(language, 'color_depth')}: {self._color_depth_short(language)}",
-                f"{tr(language, 'display_mode')}: {display_mode.label}",
-                f"{tr(language, 'font')}: {terminal_font or 'Default'}",
-            ]
-            for i, line in enumerate(lines):
-                if preview_top + 7 + i >= preview_top + preview_h - 1:
-                    break
+            out.write(
+                move(preview_top + 5, preview_left + 2)
+                + self._style(self.config.muted, self.config.panel)
+                + color_count[: preview_w - 4]
+            )
+
+            if preview_h >= 7:
+                depth_line = (
+                    f"{tr(language, 'color_depth')}: "
+                    f"{self._color_depth_short(language)}"
+                )
                 out.write(
-                    move(preview_top + 7 + i, preview_left + 2)
+                    move(preview_top + 6, preview_left + 2)
                     + self._style(self.config.muted, self.config.panel)
-                    + line[: preview_w - 4]
+                    + depth_line[: preview_w - 4]
+                )
+
+            if preview_h >= 8:
+                mode_line = (
+                    f"{tr(language, 'display_mode')}: "
+                    f"{display_mode.label}"
+                )
+                out.write(
+                    move(preview_top + 7, preview_left + 2)
+                    + self._style(self.config.muted, self.config.panel)
+                    + mode_line[: preview_w - 4]
                 )
 
             bottom_row = preview_top + preview_h
