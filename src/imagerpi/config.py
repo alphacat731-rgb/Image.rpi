@@ -34,6 +34,8 @@ class DisplayMode(str, Enum):
     HALF_BLOCK = "half"
     FULL_BLOCK = "full"
     LOWER_BLOCK = "lower"
+    LEFT_BLOCK = "left"
+    RIGHT_BLOCK = "right"
     DARK_SHADE = "dark"
     MEDIUM_SHADE = "medium"
     LIGHT_SHADE = "light"
@@ -48,6 +50,8 @@ class DisplayMode(str, Enum):
             DisplayMode.HALF_BLOCK: "Half Block (▀)",
             DisplayMode.FULL_BLOCK: "Full Block (█)",
             DisplayMode.LOWER_BLOCK: "Lower Block (▄)",
+            DisplayMode.LEFT_BLOCK: "Left Block (▌)",
+            DisplayMode.RIGHT_BLOCK: "Right Block (▐)",
             DisplayMode.DARK_SHADE: "Dark Shade (▓)",
             DisplayMode.MEDIUM_SHADE: "Medium Shade (▒)",
             DisplayMode.LIGHT_SHADE: "Light Shade (░)",
