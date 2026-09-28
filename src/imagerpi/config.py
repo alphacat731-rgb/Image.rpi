@@ -356,6 +356,7 @@ def save_user_config(
     recursive_scan: bool,
     touch_controls: bool,
     terminal_font: str,
+    palette_overrides: dict | None = None,
 ) -> None:
     import json
 
@@ -371,6 +372,7 @@ def save_user_config(
             "recursive_scan": recursive_scan,
             "touch_controls": touch_controls,
             "terminal_font": terminal_font,
+            "palettes": palette_overrides or current.get("palettes", {}),
         }
     )
     try:
