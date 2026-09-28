@@ -195,6 +195,7 @@ class Renderer:
             ),
             (tr(language, "language"), language.label),
             (tr(language, "font"), terminal_font or "Terminal default"),
+            (tr(language, "reset_settings"), ""),
             (tr(language, "back"), ""),
         ]
 
@@ -1042,7 +1043,7 @@ class Renderer:
         cols: int,
         rows: int,
         selected: int,
-        item_count: int = 9,
+        item_count: int = 10,
     ) -> int | None:
         panel_w = min(78, max(38, cols - 8))
         left = max(2, cols // 2 - panel_w // 2)
