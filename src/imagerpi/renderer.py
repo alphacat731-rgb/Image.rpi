@@ -215,6 +215,10 @@ class Renderer:
             self._braille(out, image, cols, top, bottom, view_w, view_h)
             return
 
+        if display_mode == DisplayMode.QUADRANT:
+            self._quadrant(out, image, cols, top, bottom, view_w, view_h)
+            return
+
         if display_mode == DisplayMode.HALF_BLOCK:
             src = self._prepare_image(image, view_w, view_h, 2)
             self._render_half_block(out, src, cols, top, bottom)
@@ -270,6 +274,83 @@ class Renderer:
 
             out.write(" " + RESET + rgb_bg(self.config.background) + rgb_fg(self.config.foreground))
 
+    def _quadrant(
+        self,
+        out: StringIO,
+        image: Image.Image,
+        cols: int,
+        top: int,
+        bottom: int,
+        view_w: int,
+        view_h: int,
+    ) -> None:
+        # Two columns x two rows of source pixels become one Unicode quadrant cell.
+        src = self._prepare_image(image, view_w * 2, view_h * 2, 1)
+        px = src.load()
+        width, height = src.size
+        cells_w = max(1, (width + 1) // 2)
+        cells_h = max(1, (height + 1) // 2)
+        xoff = max(1, (cols - cells_w) // 2)
+        yoff = top + max(0, ((bottom - top + 1) - cells_h) // 2)
+
+        glyphs = {
+            0: " ",
+            1: "▘",
+            2: "▝",
+            3: "▀",
+            4: "▖",
+            5: "▌",
+            6: "▞",
+            7: "▛",
+            8: "▗",
+            9: "▚",
+            10: "▐",
+            11: "▜",
+            12: "▄",
+            13: "▙",
+            14: "▟",
+            15: "█",
+        }
+        fg_encoder = rgb_fg if self.truecolor else rgb_fg_256
+
+        for cy in range(cells_h):
+            row = yoff + cy
+            if row > bottom:
+                break
+
+            out.write(move(row, xoff))
+            for cx in range(cells_w):
+                bx = cx * 2
+                by = cy * 2
+                samples: list[tuple[int, int, int]] = []
+                mask = 0
+
+                points = (
+                    (bx, by, 1),
+                    (bx + 1, by, 2),
+                    (bx, by + 1, 4),
+                    (bx + 1, by + 1, 8),
+                )
+                for x, y, bit in points:
+                    if x >= width or y >= height:
+                        continue
+                    rgb = self._rgb(px[x, y])
+                    samples.append(rgb)
+                    if self._luma(rgb) < 170:
+                        mask |= bit
+
+                avg = (
+                    tuple(
+                        sum(rgb[i] for rgb in samples) // len(samples)
+                        for i in range(3)
+                    )
+                    if samples
+                    else (255, 255, 255)
+                )
+                out.write(fg_encoder(avg) + glyphs[mask])
+
+            out.write(" " + RESET + rgb_bg(self.config.background) + rgb_fg(self.config.foreground))
+
     def _render_character_cells(
         self,
         out: StringIO,
@@ -296,7 +377,8 @@ class Renderer:
             DisplayMode.DOT: lambda l: "●",
             DisplayMode.SMALL_DOT: lambda l: "·",
         }
-        ascii_ramp = "@%#*+=-:. "
+        ascii_ramp = "@$#*+=-:. "
+        block_ramp = "█▉▊▋▌▍▎▏ "
 
         for y in range(height):
             row = yoff + y
@@ -319,6 +401,13 @@ class Renderer:
                         min(
                             len(ascii_ramp) - 1,
                             lum * len(ascii_ramp) // 256,
+                        )
+                    ]
+                elif display_mode == DisplayMode.BLOCK_GRADIENT:
+                    char = block_ramp[
+                        min(
+                            len(block_ramp) - 1,
+                            lum * len(block_ramp) // 256,
                         )
                     ]
                 else:
@@ -772,7 +861,7 @@ class Renderer:
             "ENTER  Open selected image",
             "Q  Quit",
             "",
-            "Display modes: blocks, vertical blocks, shades, dots, braille and ASCII.",
+            "Display modes: rectangles, half-blocks, gradient blocks, quadrants, shades, dots, braille and ASCII.",
         ]
         left, top = self._overlay_box(
             out,
