@@ -1,0 +1,21 @@
+{
+  "default_palette": "light",
+  "default_display_mode": "rectangles",
+  "terminal_font": "",
+
+  "palettes": {
+    "light": {
+      "background": "#FFFFFF",
+      "foreground": "#141418",
+      "muted": "#696970",
+      "panel": "#F4F5F7",
+      "border": "#D7D9DE",
+      "accent": "#2A5AFF",
+      "selection": "#191E2D"
+    },
+
+    "matrix": {
+      "accent": "#14FF37"
+    }
+  }
+}
