@@ -898,36 +898,43 @@ class Renderer:
         zoom: float,
         row: int,
     ) -> None:
-        if cols < 46:
+        if cols < 58:
             buttons = [
                 ("prev", "<"),
+                ("zoom_out", "-"),
                 ("browse", "B"),
-                ("fit", "Fit"),
+                ("fit", "F"),
                 ("info", "I"),
+                ("zoom_in", "+"),
                 ("next", ">"),
             ]
         else:
             buttons = [
                 ("prev", "<"),
+                ("zoom_out", "−"),
                 ("browse", tr(language, "browse")),
                 ("fit", tr(language, "fit")),
                 ("info", tr(language, "info")),
+                ("zoom_in", "+"),
                 ("next", ">"),
             ]
 
         gap = 1
         widths = [max(5, len(label) + 4) for _, label in buttons]
         total = sum(widths) + gap * (len(buttons) - 1)
+
         if total > cols - 2:
             buttons = [
                 ("prev", "<"),
+                ("zoom_out", "-"),
                 ("browse", "B"),
-                ("fit", "Fit"),
+                ("fit", "F"),
                 ("info", "I"),
+                ("zoom_in", "+"),
                 ("next", ">"),
             ]
-            widths = [5, 5, 7, 5, 5]
-            total = sum(widths) + gap * 4
+            widths = [5, 5, 5, 5, 5, 5, 5]
+            total = sum(widths) + gap * 6
 
         left = max(1, (cols - total) // 2)
 
@@ -946,7 +953,11 @@ class Renderer:
             )
             out.write(
                 move(row + 2, x)
-                + self._style(self.config.foreground, self.config.panel, bold=True)
+                + self._style(
+                    self.config.foreground,
+                    self.config.panel,
+                    bold=True,
+                )
                 + "│" + label.center(width - 2) + "│"
             )
             x += width + gap
@@ -1116,36 +1127,42 @@ class Renderer:
         if y < toolbar_row + 1 or y > toolbar_row + 2:
             return None
 
-        if cols < 46:
+        if cols < 58:
             labels = [
                 ("prev", "<"),
+                ("zoom_out", "-"),
                 ("browse", "B"),
-                ("fit", "Fit"),
+                ("fit", "F"),
                 ("info", "I"),
+                ("zoom_in", "+"),
                 ("next", ">"),
             ]
         else:
             labels = [
                 ("prev", "<"),
+                ("zoom_out", "−"),
                 ("browse", tr(language, "browse")),
                 ("fit", tr(language, "fit")),
                 ("info", tr(language, "info")),
+                ("zoom_in", "+"),
                 ("next", ">"),
             ]
 
         gap = 1
         widths = [max(5, len(label) + 4) for _, label in labels]
-        total = sum(widths) + gap * 4
+        total = sum(widths) + gap * 6
         if total > cols - 2:
             labels = [
                 ("prev", "<"),
+                ("zoom_out", "-"),
                 ("browse", "B"),
-                ("fit", "Fit"),
+                ("fit", "F"),
                 ("info", "I"),
+                ("zoom_in", "+"),
                 ("next", ">"),
             ]
-            widths = [5, 5, 7, 5, 5]
-            total = sum(widths) + gap * 4
+            widths = [5, 5, 5, 5, 5, 5, 5]
+            total = sum(widths) + gap * 6
 
         left = max(1, (cols - total) // 2)
         current_x = left
@@ -1153,6 +1170,7 @@ class Renderer:
             if current_x <= x < current_x + width:
                 return action
             current_x += width + gap
+
         return None
 
     def _help_overlay(self, out: StringIO, cols: int, rows: int, language: Language) -> None:
