@@ -91,6 +91,50 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(renderer.browser_hit(40, 5, 80, 24, 5, 0), 0)
         self.assertEqual(renderer.browser_hit(40, 22, 80, 24, 5, 0), -1)
 
+    def test_all_display_modes_render(self) -> None:
+        from io import StringIO
+        from imagerpi.renderer import Renderer
+
+        config = AppConfig()
+        renderer = Renderer(config)
+        sample = Image.new("RGB", (32, 20), (120, 180, 240))
+
+        for mode in DisplayMode:
+            with self.subTest(mode=mode.value):
+                out = StringIO()
+                renderer._image(
+                    out,
+                    sample,
+                    40,
+                    1,
+                    14,
+                    mode,
+                    1.0,
+                    0.0,
+                    0.0,
+                )
+                self.assertTrue(out.getvalue())
+
+    def test_extreme_zoom_keeps_background_padding(self) -> None:
+        from imagerpi.renderer import Renderer
+
+        config = AppConfig()
+        renderer = Renderer(config)
+        sample = Image.new("RGB", (40, 2), (255, 0, 0))
+        view = renderer._view_source(
+            sample,
+            20,
+            10,
+            8.0,
+            0.0,
+            0.0,
+        )
+        self.assertEqual(view.size, (20, 10))
+        self.assertIn(
+            view.getpixel((0, 9)),
+            {config.background, (255, 0, 0)},
+        )
+
     def test_list_images_recursive(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
