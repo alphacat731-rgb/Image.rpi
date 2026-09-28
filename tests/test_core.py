@@ -9,7 +9,15 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from imagerpi.config import AppConfig, DisplayMode, Palette, Quality
+from imagerpi.config import (
+    AppConfig,
+    ColorDepth,
+    DisplayMode,
+    Palette,
+    Quality,
+    MAX_SOURCE_PIXELS,
+    MAX_ZOOM,
+)
 from imagerpi.loader import ImageLoader, list_images
 
 
@@ -31,13 +39,28 @@ class CoreTests(unittest.TestCase):
             loader._target_pixels((1600, 1200), q, (100, 30))
             for q in Quality
         ]
-        self.assertEqual(sizes[0], (30, 23))
+        self.assertEqual(sizes[0], (245, 184))
         self.assertTrue(
             all(
                 a[0] <= b[0] and a[1] <= b[1]
                 for a, b in zip(sizes, sizes[1:])
             )
         )
+
+    def test_high_resolution_source_supports_zoom(self) -> None:
+        loader = ImageLoader(AppConfig())
+        source = loader._target_pixels((1920, 1080), Quality.ULTRA, (100, 30))
+        self.assertGreaterEqual(source[0] * source[1], 500_000)
+        self.assertLessEqual(source[0] * source[1], MAX_SOURCE_PIXELS)
+
+    def test_ansi16_color_depth(self) -> None:
+        from imagerpi.renderer import Renderer
+
+        config = AppConfig()
+        config.color_depth = ColorDepth.ANSI16
+        renderer = Renderer(config)
+        self.assertFalse(renderer.truecolor)
+        self.assertEqual(renderer._color_count_short(), "16")
 
     def test_image_loading_and_white_composite(self) -> None:
         loader = ImageLoader(AppConfig())
@@ -57,7 +80,6 @@ class CoreTests(unittest.TestCase):
             )
 
     def test_renderer_touch_hit_regions_exist(self) -> None:
-        from imagerpi.config import ColorDepth
         from imagerpi.renderer import Renderer
 
         config = AppConfig()
@@ -79,7 +101,6 @@ class CoreTests(unittest.TestCase):
         self.assertLessEqual(first_row + 2 * (height + gap) + height - 1, 10)
 
     def test_touch_hit_regions_follow_visible_rows(self) -> None:
-        from imagerpi.config import ColorDepth
         from imagerpi.renderer import Renderer
 
         config = AppConfig()
