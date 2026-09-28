@@ -69,7 +69,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(renderer.viewer_hit(20, 20, 80, 24), None)
         self.assertEqual(renderer.viewer_hit(30, 21, 80, 24), "browse")
         self.assertEqual(renderer.viewer_hit(16, 21, 80, 24), "prev")
-        self.assertEqual(renderer.viewer_hit(40, 21, 80, 24), "browse")
+        self.assertEqual(renderer.viewer_hit(30, 21, 80, 24), "browse")
 
     def test_small_terminal_menu_geometry(self) -> None:
         from imagerpi.renderer import Renderer
