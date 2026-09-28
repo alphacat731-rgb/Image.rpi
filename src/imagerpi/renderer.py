@@ -7,7 +7,15 @@ from typing import Callable
 
 from PIL import Image
 
-from .config import AppConfig, ColorDepth, DisplayMode, Language, Palette, Quality
+from .config import (
+    MAX_ZOOM,
+    AppConfig,
+    ColorDepth,
+    DisplayMode,
+    Language,
+    Palette,
+    Quality,
+)
 from .i18n import tr
 from .loader import LoadedImage
 from .terminal import (
@@ -30,7 +38,7 @@ class Renderer:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
         self._view_cache: OrderedDict[tuple[int, int, int, float], Image.Image] = OrderedDict()
-        self._view_cache_limit = 6
+        self._view_cache_limit = 4
 
         self.truecolor = (
             config.color_depth is ColorDepth.TRUECOLOR
@@ -798,7 +806,7 @@ class Renderer:
     ) -> Image.Image:
         target_w = max(1, target_w)
         target_h = max(1, target_h)
-        zoom = max(1.0, min(8.0, zoom))
+        zoom = max(1.0, min(MAX_ZOOM, zoom))
 
         cache_key = (
             id(image),
