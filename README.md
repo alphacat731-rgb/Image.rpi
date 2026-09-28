@@ -20,7 +20,8 @@ A terminal-native image viewer for small Linux systems, especially Raspberry Pi 
 - JPEG, PNG, WebP, BMP, GIF, TIFF and common Netpbm formats via Pillow.
 - Conservative decoded-pixel safety limit for Raspberry Pi memory constraints.
 - 24 interface color presets with editable RGB overrides.
-- Truecolor/ANSI256 selection and a palette preview in Options.
+- Truecolor/ANSI16/ANSI256 selection and a palette preview in Options.
+- Higher-resolution source preparation for smoother 1×–8× zoom.
 - No GTK, Qt, X11 or Wayland dependency.
 
 ## Install on Debian Trixie
@@ -74,7 +75,7 @@ ASCII rendering is still available as an optional compatibility mode; it is not 
 
 ## Color palettes
 
-IMAGE.RPI includes 24 built-in interface themes. The theme itself does not reduce the number of image colors. When the terminal reports Truecolor support, image pixels can use 24-bit RGB (16,777,216 possible RGB values); otherwise the renderer falls back to 256-color ANSI output.
+IMAGE.RPI includes 24 built-in interface themes. The theme itself does not reduce the number of image colors. When the terminal reports Truecolor support, image pixels can use 24-bit RGB (16,777,216 possible RGB values). IMAGE.RPI also supports ANSI 256 and ANSI 16 color output.
 
 On first run, the app creates:
 
