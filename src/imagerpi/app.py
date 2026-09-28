@@ -58,6 +58,7 @@ class ImageApp:
 
         self.current: LoadedImage | None = None
         self.current_dir = Path.cwd().resolve()
+        self.library_root = self.current_dir
         self.pending_open: Path | None = None
 
         raw_path = Path(initial).expanduser().resolve() if initial else None
@@ -241,11 +242,23 @@ class ImageApp:
                     self.status = f"Scan error: {item.error}"
                     self.entries = []
                 else:
-                    self.entries = item.entries or []
+                            self.entries = item.entries or []
+                    self.library_root = self.current_dir
                     self._sync_index()
 
                 if self.screen == self.STARTUP:
-                    self.screen = self.MAIN
+                    if self.pending_open is not None:
+                        try:
+                            self.index = self.entries.index(self.pending_open)
+                            pending = self.pending_open
+                            self.pending_open = None
+                            self._start_load(pending)
+                        except ValueError:
+                            self.pending_open = None
+                            self.status = "Requested image was not found in the library."
+                            self.screen = self.MAIN
+                    else:
+                        self.screen = self.MAIN
 
                 continue
 
@@ -400,6 +413,7 @@ class ImageApp:
                 self.entries,
                 self.index,
                 language=self.language,
+                root=self.library_root,
             )
 
         return self.renderer.frame(
@@ -409,6 +423,7 @@ class ImageApp:
             display_mode=self.display_mode,
             language=self.language,
             browser_index=self.index,
+            image_count=len(self.entries),
             zoom=self.zoom,
             pan_x=self.pan_x,
             pan_y=self.pan_y,
@@ -676,7 +691,13 @@ class ImageApp:
             return
 
         if self.screen == self.VIEWER:
-            action = self.renderer.viewer_hit(x, y, cols, rows)
+            action = self.renderer.viewer_hit(
+                x,
+                y,
+                cols,
+                rows,
+                self.language,
+            )
             if action == "prev":
                 self._step_image(-1)
             elif action == "next":
