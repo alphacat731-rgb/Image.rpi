@@ -268,7 +268,7 @@ class Renderer:
 
                 out.write("▀")
 
-            out.write(" " + RESET)
+            out.write(" " + RESET + rgb_bg(self.config.background) + rgb_fg(self.config.foreground))
 
     def _render_character_cells(
         self,
@@ -326,7 +326,7 @@ class Renderer:
 
                 out.write(char)
 
-            out.write(" " + RESET)
+            out.write(" " + RESET + rgb_bg(self.config.background) + rgb_fg(self.config.foreground))
 
     def _braille(
         self,
@@ -401,7 +401,7 @@ class Renderer:
 
                 out.write(chr(0x2800 + mask))
 
-            out.write(" " + RESET)
+            out.write(" " + RESET + rgb_bg(self.config.background) + rgb_fg(self.config.foreground))
 
     def _empty(
         self,
