@@ -150,12 +150,16 @@ class ImageLoader:
                     f"above the safety limit of {self.config.max_pixels:,}."
                 )
 
-            # Apply EXIF orientation before deciding the final aspect/size.
-            source = ImageOps.exif_transpose(source)
-            original_size = source.size
+            raw_size = source.size
+            orientation = source.getexif().get(274, 1)
+            oriented_size = (
+                (raw_size[1], raw_size[0])
+                if orientation in {5, 6, 7, 8}
+                else raw_size
+            )
 
             target = self._target_pixels(
-                original_size,
+                oriented_size,
                 quality,
                 terminal_cells,
             )
@@ -182,6 +186,8 @@ class ImageLoader:
             else:
                 source = source.copy()
 
+            source = ImageOps.exif_transpose(source)
+            original_size = source.size
             frame = self._composite_white(source)
 
         event("decode", 1.0, "Image decoded")
