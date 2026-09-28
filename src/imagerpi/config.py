@@ -254,6 +254,10 @@ class AppConfig:
     default_palette: Palette = Palette.LIGHT
     default_display_mode: DisplayMode = DisplayMode.FULL_BLOCK
     terminal_font: str = ""
+    color_depth: ColorDepth = ColorDepth.AUTO
+    recursive_scan: bool = True
+    touch_controls: bool = True
+    language: Language = Language.ENGLISH
     palette_overrides: dict[str, dict[str, tuple[int, int, int]]] | None = None
 
     def apply_palette(self, palette: Palette) -> None:
@@ -321,6 +325,12 @@ class AppConfig:
                     )
                 overrides[enum_palette.value] = parsed
 
+        depth_name = str(user.get("color_depth", "auto")).lower()
+        depth = next((d for d in ColorDepth if d.value == depth_name), ColorDepth.AUTO)
+
+        language_name = str(user.get("language", "en")).lower()
+        language = next((lang for lang in Language if lang.value == language_name), Language.ENGLISH)
+
         return cls(
             max_pixels=max_pixels,
             large_file_bytes=large_file,
@@ -329,8 +339,46 @@ class AppConfig:
             default_palette=palette,
             default_display_mode=display_mode,
             terminal_font=str(user.get("terminal_font", "") or "").strip(),
+            color_depth=depth,
+            recursive_scan=bool(user.get("recursive_scan", True)),
+            touch_controls=bool(user.get("touch_controls", True)),
+            language=language,
             palette_overrides=overrides,
         )
+
+
+def save_user_config(
+    *,
+    palette: Palette,
+    display_mode: DisplayMode,
+    quality: Quality,
+    language: Language,
+    color_depth: ColorDepth,
+    recursive_scan: bool,
+    touch_controls: bool,
+    terminal_font: str,
+) -> None:
+    import json
+
+    path = _config_path()
+    current = load_user_config()
+    current.update(
+        {
+            "default_palette": palette.value,
+            "default_display_mode": "rectangles" if display_mode is DisplayMode.FULL_BLOCK else display_mode.value,
+            "quality": quality.name,
+            "language": language.value,
+            "color_depth": color_depth.value,
+            "recursive_scan": recursive_scan,
+            "touch_controls": touch_controls,
+            "terminal_font": terminal_font,
+        }
+    )
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _positive_int(value: str | None, default: int) -> int:
