@@ -35,10 +35,10 @@ class Renderer:
         )
 
     def _fg(self, rgb: tuple[int, int, int]) -> str:
-        return rgb_fg(rgb) if self.truecolor else rgb_fg_256(rgb)
+        return rgb_fg(rgb, self.truecolor) if self.truecolor else rgb_fg_256(rgb)
 
     def _bg(self, rgb: tuple[int, int, int]) -> str:
-        return rgb_bg(rgb) if self.truecolor else rgb_bg_256(rgb)
+        return rgb_bg(rgb, self.truecolor) if self.truecolor else rgb_bg_256(rgb)
 
     def _style(
         self,
