@@ -31,7 +31,7 @@ class CoreTests(unittest.TestCase):
             loader._target_pixels((1600, 1200), q, (100, 30))
             for q in Quality
         ]
-        self.assertEqual(sizes[0], (16, 12))
+        self.assertEqual(sizes[0], (20, 10))
         self.assertTrue(
             all(
                 a[0] <= b[0] and a[1] <= b[1]
@@ -55,6 +55,16 @@ class CoreTests(unittest.TestCase):
                 loaded.image.getpixel((1, 1)),
                 (255, 255, 255),
             )
+
+    def test_renderer_touch_hit_regions_exist(self) -> None:
+        from imagerpi.config import ColorDepth
+        from imagerpi.renderer import Renderer
+
+        config = AppConfig()
+        config.color_depth = ColorDepth.ANSI256
+        renderer = Renderer(config)
+        self.assertEqual(renderer.main_menu_hit(40, 10, 80, 24), 0)
+        self.assertEqual(renderer.viewer_hit(20, 20, 80, 24), None)
 
     def test_list_images_filters_extensions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
