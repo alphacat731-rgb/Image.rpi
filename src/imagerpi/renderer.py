@@ -1184,10 +1184,12 @@ class Renderer:
             self.config.accent,
             self.config.selection,
         ]
-        swatch_w = max(3, width // len(colors))
+        width = max(7, width)
+        swatch_w = max(1, width // len(colors))
         for i, color in enumerate(colors):
-            x = left + i * swatch_w
-            w = min(swatch_w, max(1, left + width - x))
+            x = left + (i * width) // len(colors)
+            x2 = left + ((i + 1) * width) // len(colors)
+            w = max(1, x2 - x)
             out.write(
                 move(row, x)
                 + self._bg(color)
@@ -1195,21 +1197,28 @@ class Renderer:
                 + RESET
             )
 
-        gradient_w = max(1, width // 24)
-        start = self.config.background
-        end = self.config.accent
-        for i in range(24):
-            t = i / 23
+        # Use proportional boundaries so all 24 segments fit exactly, even in
+        # narrow Options panels.
+        steps = 24
+        for i in range(steps):
+            x = left + (i * width) // steps
+            x2 = left + ((i + 1) * width) // steps
+            w = max(1, x2 - x)
+            t = i / (steps - 1)
+            start = self.config.background
+            end = self.config.accent
             color = tuple(
                 int(start[c] + (end[c] - start[c]) * t)
                 for c in range(3)
             )
             out.write(
-                move(row + 1, left + i * gradient_w)
+                move(row + 1, x)
                 + self._bg(color)
-                + " " * min(gradient_w, width - i * gradient_w)
+                + " " * w
                 + RESET
             )
+
+
 
     def _color_depth_short(self, language: Language) -> str:
         if self.truecolor:
