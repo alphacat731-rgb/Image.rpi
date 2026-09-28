@@ -265,12 +265,18 @@ def list_images(
         return []
 
     found: list[Path] = []
+    last_progress = 0.0
 
     def report(progress: float, message: str) -> None:
+        nonlocal last_progress
+        last_progress = max(
+            last_progress,
+            max(0.0, min(1.0, progress)),
+        )
         if on_event:
             on_event(
                 ScanEvent(
-                    max(0.0, min(1.0, progress)),
+                    last_progress,
                     message,
                     len(found),
                 )
