@@ -35,6 +35,8 @@ class DisplayMode(str, Enum):
     FULL_BLOCK = "full"
     LOWER_BLOCK = "lower"
     LEFT_BLOCK = "left"
+    BLOCK_GRADIENT = "gradient"
+    QUADRANT = "quadrant"
     RIGHT_BLOCK = "right"
     DARK_SHADE = "dark"
     MEDIUM_SHADE = "medium"
@@ -52,6 +54,8 @@ class DisplayMode(str, Enum):
             DisplayMode.LOWER_BLOCK: "Lower Block (▄)",
             DisplayMode.LEFT_BLOCK: "Left Block (▌)",
             DisplayMode.RIGHT_BLOCK: "Right Block (▐)",
+            DisplayMode.BLOCK_GRADIENT: "Block Gradient (▏▎▍▌▋▊▉█)",
+            DisplayMode.QUADRANT: "Quadrants (◩)",
             DisplayMode.DARK_SHADE: "Dark Shade (▓)",
             DisplayMode.MEDIUM_SHADE: "Medium Shade (▒)",
             DisplayMode.LIGHT_SHADE: "Light Shade (░)",
