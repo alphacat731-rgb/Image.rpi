@@ -31,8 +31,8 @@ class ImageApp:
         self.loader = ImageLoader(self.config)
 
         self.quality = self.config.default_quality
-        self.display_mode = DisplayMode.HALF_BLOCK
-        self.palette = Palette.LIGHT
+        self.display_mode = self.config.default_display_mode
+        self.palette = self.config.default_palette
         self.config.apply_palette(self.palette)
 
         self.current: LoadedImage | None = None
@@ -66,7 +66,7 @@ class ImageApp:
         self._last_render_time = 0.0
 
     def run(self) -> None:
-        with terminal_session() as term:
+        with terminal_session(self.config.terminal_font) as term:
             force = True
 
             while self.running:
