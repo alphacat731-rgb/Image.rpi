@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imagerpi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Terminal-native image viewer for Raspberry Pi and Linux"
 requires-python = ">=3.11"
 dependencies = ["Pillow>=11.1,<12"]
