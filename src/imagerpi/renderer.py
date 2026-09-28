@@ -667,6 +667,7 @@ class Renderer:
                 zoom,
                 pan_x,
                 pan_y,
+                quality,
             )
         else:
             self._empty(out, cols, body_top, body_bottom, language)
@@ -768,32 +769,109 @@ class Renderer:
         zoom: float,
         pan_x: float,
         pan_y: float,
+        quality: Quality = Quality.ULTRA,
     ) -> None:
         view_w = max(8, cols - 2)
         view_h = max(2, bottom - top + 1)
 
+        # Quality controls the effective terminal resolution. Very Low uses
+        # a deliberately coarse grid, while Ultra can use the full grid.
+        q = max(0.10, min(1.0, quality / 100.0))
+
+        full_target_h = view_h * 2
+        effective_w = max(2, int(view_w * q))
+        effective_h = max(2, int(full_target_h * q))
+
         if display_mode is DisplayMode.FULL_BLOCK:
-            source = self._view_source(image, view_w, view_h * 2, zoom, pan_x, pan_y)
+            source = self._view_source(
+                image,
+                effective_w,
+                effective_h,
+                zoom,
+                pan_x,
+                pan_y,
+            )
+            # Nearest-neighbour expansion preserves the deliberately coarse
+            # quality grid instead of smoothing it back to Ultra-like detail.
+            source = source.resize(
+                (view_w, full_target_h),
+                Image.Resampling.NEAREST,
+            )
             self._render_rectangles(out, source, cols, top, bottom)
             return
 
         if display_mode is DisplayMode.HALF_BLOCK:
-            source = self._view_source(image, view_w, view_h * 2, zoom, pan_x, pan_y)
+            source = self._view_source(
+                image,
+                effective_w,
+                effective_h,
+                zoom,
+                pan_x,
+                pan_y,
+            )
+            source = source.resize(
+                (view_w, full_target_h),
+                Image.Resampling.NEAREST,
+            )
             self._render_half_block(out, source, cols, top, bottom)
             return
 
         if display_mode is DisplayMode.BRAILLE:
-            source = self._view_source(image, view_w * 2, view_h * 4, zoom, pan_x, pan_y)
+            bw = max(2, int(view_w * 2 * q))
+            bh = max(4, int(view_h * 4 * q))
+            source = self._view_source(
+                image,
+                bw,
+                bh,
+                zoom,
+                pan_x,
+                pan_y,
+            )
+            source = source.resize(
+                (view_w * 2, view_h * 4),
+                Image.Resampling.NEAREST,
+            )
             self._render_braille(out, source, cols, top, bottom)
             return
 
         if display_mode is DisplayMode.QUADRANT:
-            source = self._view_source(image, view_w * 2, view_h * 2, zoom, pan_x, pan_y)
+            qw = max(2, int(view_w * 2 * q))
+            qh = max(2, int(view_h * 2 * q))
+            source = self._view_source(
+                image,
+                qw,
+                qh,
+                zoom,
+                pan_x,
+                pan_y,
+            )
+            source = source.resize(
+                (view_w * 2, view_h * 2),
+                Image.Resampling.NEAREST,
+            )
             self._render_quadrant(out, source, cols, top, bottom)
             return
 
-        source = self._view_source(image, view_w, view_h, zoom, pan_x, pan_y)
-        self._render_character_cells(out, source, cols, top, bottom, display_mode)
+        source = self._view_source(
+            image,
+            effective_w,
+            max(2, int(view_h * q)),
+            zoom,
+            pan_x,
+            pan_y,
+        )
+        source = source.resize(
+            (view_w, view_h),
+            Image.Resampling.NEAREST,
+        )
+        self._render_character_cells(
+            out,
+            source,
+            cols,
+            top,
+            bottom,
+            display_mode,
+        )
 
     def _view_source(
         self,
