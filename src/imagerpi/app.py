@@ -652,6 +652,10 @@ class ImageApp:
             self.index = max(0, self.index - 1)
         elif key == "DOWN":
             self.index = min(max(0, len(self.entries) - 1), self.index + 1)
+        elif key == "PAGEUP":
+            self.index = max(0, self.index - 8)
+        elif key == "PAGEDOWN":
+            self.index = min(max(0, len(self.entries) - 1), self.index + 8)
         elif key in {"ENTER", "\n", "\r", "RIGHT"} and self.entries:
             self._start_load(self.entries[self.index])
 
