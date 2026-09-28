@@ -90,6 +90,7 @@ class ImageApp:
         ] = queue.Queue()
 
         self.scanning = False
+        self._scan_again = False
         self.loading = False
         self.running = True
 
@@ -166,6 +167,7 @@ class ImageApp:
 
     def _start_scan(self) -> None:
         if self.scanning:
+            self._scan_again = True
             return
 
         self.scanning = True
@@ -246,6 +248,10 @@ class ImageApp:
                     self.entries = item.entries or []
                     self.library_root = self.current_dir
                     self._sync_index()
+
+                if self._scan_again:
+                    self._scan_again = False
+                    self._start_scan()
 
                 if self.screen == self.STARTUP:
                     if self.pending_open is not None:
@@ -449,6 +455,11 @@ class ImageApp:
 
         if self.screen == self.OPTIONS:
             self._handle_options_key(key)
+            return
+
+        if key == "F5" and self.screen in {self.MAIN, self.BROWSER, self.OPTIONS}:
+            self._start_scan()
+            self.status = tr(self.language, "loading_library")
             return
 
         if key in {"q", "Q"}:
