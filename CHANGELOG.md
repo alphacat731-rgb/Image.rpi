@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+### Fixed
+- Image quality now visibly changes the effective terminal render resolution; Very Low no longer looks identical to Ultra after smoothing.
+- Low-quality renders are expanded with nearest-neighbour sampling so their intentionally coarse block structure is preserved.
+- Added a regression test for the quality-resolution mapping.
+
 ## 0.2.1
 
 ### Improved
