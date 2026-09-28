@@ -11,6 +11,7 @@ from .config import (
     AppConfig,
     ColorDepth,
     DisplayMode,
+    FONT_PRESETS,
     Language,
     Palette,
     Quality,
@@ -553,10 +554,10 @@ class ImageApp:
             return
 
         if key == "UP":
-            self.options_index = (self.options_index - 1) % 9
+            self.options_index = (self.options_index - 1) % 10
             return
         if key == "DOWN":
-            self.options_index = (self.options_index + 1) % 9
+            self.options_index = (self.options_index + 1) % 10
             return
 
         if key not in {"LEFT", "RIGHT", "\n", "\r", " "}:
@@ -603,9 +604,23 @@ class ImageApp:
             self.status = self.language.label
 
         elif self.options_index == 7:
-            self._reset_settings()
+            current = self.config.terminal_font
+            try:
+                current_index = FONT_PRESETS.index(current)
+            except ValueError:
+                current_index = 0
+            next_index = (current_index + direction) % len(FONT_PRESETS)
+            self.config.terminal_font = FONT_PRESETS[next_index]
+            self.status = (
+                f"{tr(self.language, 'font')}: "
+                f"{self.config.terminal_font or 'Terminal default'}"
+                f" — {tr(self.language, 'font_next_launch')}"
+            )
 
         elif self.options_index == 8:
+            self._reset_settings()
+
+        elif self.options_index == 9:
             self._go_main()
 
     @staticmethod
@@ -627,6 +642,7 @@ class ImageApp:
         self.config.recursive_scan = self.recursive_scan
         self.config.touch_controls = self.touch_controls
         self.config.terminal_font = ""
+        self.config.palette_overrides = {}
         self.config.apply_palette(self.palette)
         self.renderer = Renderer(self.config)
         self.status = tr(self.language, "settings_saved")
