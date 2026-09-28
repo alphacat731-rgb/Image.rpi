@@ -22,7 +22,8 @@ class CoreTests(unittest.TestCase):
         config = AppConfig()
         self.assertIs(config.default_display_mode, DisplayMode.FULL_BLOCK)
         self.assertEqual(len(list(Palette)), 24)
-        self.assertIn("accent", config.apply_palette.__annotations__ if hasattr(config.apply_palette, "__annotations__") else {})
+        config.apply_palette(Palette.MATRIX)
+        self.assertEqual(config.accent, (20, 255, 55))
 
     def test_quality_changes_target_pixels(self) -> None:
         loader = ImageLoader(AppConfig())
