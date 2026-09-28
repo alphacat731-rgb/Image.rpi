@@ -436,14 +436,8 @@ class Renderer:
         term_text = tr(language, "terminal", cols=cols, rows=rows)
         count_text = tr(language, "image_count", count=image_count)
         meta = f"{term_text}   •   {count_text}"
-        meta_y = min(
-            rows - 2,
-            max(
-                top + max_items + 1,
-                bottom_row + 1 if draw_preview else top + max_items + 1,
-            ),
-        )        out.write(
-            move(meta_y, max(1, center - len(meta) // 2))
+        out.write(
+            move(3, max(1, center - len(meta) // 2))
             + self._style(self.config.muted, self.config.background)
             + meta[: max(1, cols - 2)]
         )
