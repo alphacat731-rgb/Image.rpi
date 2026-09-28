@@ -88,6 +88,19 @@ def style(
     return "".join(parts)
 
 
+def set_terminal_font(font: str) -> str:
+    """
+    Best-effort xterm OSC 50 font selection.
+    Terminals that do not implement OSC 50 simply ignore the sequence.
+    """
+    safe = font.replace("\x1b", "").replace("\x07", "").replace("\n", "")
+    return f"\x1b]50;{safe}\x07"
+
+
+def reset_terminal_font() -> str:
+    return "\x1b]50;#0\x07"
+
+
 def terminal_size() -> shutil.os.terminal_size:
     return shutil.get_terminal_size((80, 24))
 
@@ -97,19 +110,22 @@ class RawTerminal:
     enabled: bool = False
     fd: int = sys.stdin.fileno()
     _old: list | None = None
+    _font_was_set: bool = False
 
-    def enter(self) -> None:
+    def enter(self, font: str = "") -> None:
         if not os.isatty(self.fd):
             return
         self._old = termios.tcgetattr(self.fd)
         tty.setcbreak(self.fd)
         self.enabled = True
-        sys.stdout.write(ALT_SCREEN_ON + HIDE_CURSOR + MOUSE_ON + CLEAR + RESET)
+        font_sequence = set_terminal_font(font) if font else ""
+        self._font_was_set = bool(font_sequence)
+        sys.stdout.write(ALT_SCREEN_ON + HIDE_CURSOR + MOUSE_ON + CLEAR + RESET + font_sequence)
         sys.stdout.flush()
 
     def leave(self) -> None:
         if self.enabled:
-            sys.stdout.write(RESET + MOUSE_OFF + SHOW_CURSOR + ALT_SCREEN_OFF)
+            sys.stdout.write(RESET + (reset_terminal_font() if self._font_was_set else "") + MOUSE_OFF + SHOW_CURSOR + ALT_SCREEN_OFF)
             sys.stdout.flush()
             if self._old is not None:
                 termios.tcsetattr(self.fd, termios.TCSADRAIN, self._old)
@@ -152,9 +168,9 @@ class RawTerminal:
 
 
 @contextmanager
-def terminal_session():
+def terminal_session(font: str = ""):
     terminal = RawTerminal()
-    terminal.enter()
+    terminal.enter(font)
     try:
         yield terminal
     finally:
