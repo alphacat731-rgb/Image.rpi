@@ -13,6 +13,16 @@ IMAGE_EXTENSIONS = {
     ".tif", ".tiff", ".ppm", ".pgm", ".pbm",
 }
 
+IGNORED_DIRS = {
+    ".git", ".github", "__pycache__", ".venv", "venv",
+    "node_modules", "dist", "build",
+}
+
+# Enough source samples for every renderer currently supported:
+# 2 horizontal samples/cell and 4 vertical samples/cell.
+MAX_SOURCE_X = 2
+MAX_SOURCE_Y = 4
+
 
 @dataclass(slots=True)
 class LoadEvent:
@@ -28,10 +38,23 @@ class LoadedImage:
     original_size: tuple[int, int]
     mode: str
     file_bytes: int
+    source_size: tuple[int, int]
+
+
+@dataclass(slots=True)
+class ScanEvent:
+    progress: float
+    message: str
+    found: int
 
 
 class ProgressReader:
-    def __init__(self, fp, total: int, callback: Callable[[float], None]) -> None:
+    def __init__(
+        self,
+        fp,
+        total: int,
+        callback: Callable[[float], None],
+    ) -> None:
         self._fp = fp
         self._total = max(total, 1)
         self._callback = callback
@@ -43,7 +66,7 @@ class ProgressReader:
         except (AttributeError, OSError):
             return
         value = max(0.0, min(1.0, pos / self._total))
-        if value - self._last >= 0.01 or value >= 1.0:
+        if value - self._last >= 0.02 or value >= 1.0:
             self._last = value
             self._callback(value)
 
@@ -112,59 +135,66 @@ class ImageLoader:
             reader = ProgressReader(
                 raw,
                 file_bytes,
-                lambda p: event("decode", p, "Decoding image..."),
+                lambda p: event("decode", p * 0.65, "Decoding image..."),
             )
-            image = Image.open(reader)
-            original_size = image.size
+            source = Image.open(reader)
 
-            pixel_count = original_size[0] * original_size[1]
+            raw_size = source.size
+            if raw_size[0] <= 0 or raw_size[1] <= 0:
+                raise ValueError("Image has invalid dimensions.")
+
+            pixel_count = raw_size[0] * raw_size[1]
             if pixel_count > self.config.max_pixels:
                 raise ValueError(
-                    f"Image is {original_size[0]:,}x{original_size[1]:,} pixels, "
-                    f"above the safety limit of {self.config.max_pixels:,}. "
-                    "Set IMAGERPI_MAX_PIXELS to raise it."
+                    f"Image is {raw_size[0]:,}x{raw_size[1]:,} pixels, "
+                    f"above the safety limit of {self.config.max_pixels:,}."
                 )
+
+            # Apply EXIF orientation before deciding the final aspect/size.
+            source = ImageOps.exif_transpose(source)
+            original_size = source.size
+
+            target = self._target_pixels(
+                original_size,
+                quality,
+                terminal_cells,
+            )
 
             if is_large:
                 event(
                     "decode",
                     0.08,
-                    "Large image detected; using memory-friendly decode...",
+                    "Large image detected; using a reduced decode target...",
                 )
 
-            image.seek(0)
-            image.load()
-            frame = image.copy()
+            # JPEG decoders can avoid creating the full original raster.
+            try:
+                source.draft("RGB", target)
+            except (AttributeError, OSError):
+                pass
+
+            event("prepare", 0.0, "Preparing terminal-sized preview...")
+            source.thumbnail(target, Image.Resampling.LANCZOS)
+            source.load()
+
+            if source.mode not in {"RGB", "RGBA"}:
+                source = source.convert("RGBA")
+            else:
+                source = source.copy()
+
+            frame = self._composite_white(source)
 
         event("decode", 1.0, "Image decoded")
-        event("prepare", 0.0, "Preparing terminal-sized preview...")
-
-        frame = ImageOps.exif_transpose(frame)
-        target_w, target_h = self._target_pixels(
-            original_size,
-            quality,
-            terminal_cells,
-        )
-
-        if frame.mode not in {"RGB", "RGBA"}:
-            frame = frame.convert("RGBA")
-        else:
-            frame = frame.copy()
-
-        frame.thumbnail(
-            (target_w, target_h),
-            Image.Resampling.LANCZOS,
-        )
-        event("prepare", 0.75, "Fitting image to terminal")
-        frame = self._composite_white(frame)
+        event("prepare", 0.75, "Preview fitted")
         event("prepare", 1.0, "Ready")
 
         return LoadedImage(
-            path,
-            frame,
-            original_size,
-            frame.mode,
-            file_bytes,
+            path=path,
+            image=frame,
+            original_size=original_size,
+            mode=frame.mode,
+            file_bytes=file_bytes,
+            source_size=frame.size,
         )
 
     @staticmethod
@@ -174,20 +204,26 @@ class ImageLoader:
         terminal_cells: tuple[int, int],
     ) -> tuple[int, int]:
         cols, rows = terminal_cells
-        max_w = max(8, cols - 2)
-        max_h = max(4, (rows - 5) * 2)
-        scale = quality / 100.0
+        max_w = max(16, (cols - 2) * MAX_SOURCE_X)
+        max_h = max(8, (rows - 7) * MAX_SOURCE_Y)
+
         source_w, source_h = original_size
         fit = min(max_w / source_w, max_h / source_h, 1.0)
-        fit *= scale
-        return max(8, int(source_w * fit)), max(4, int(source_h * fit))
+        fit *= quality / 100.0
+
+        return (
+            max(8, int(source_w * fit)),
+            max(4, int(source_h * fit)),
+        )
 
     @staticmethod
     def _composite_white(image: Image.Image) -> Image.Image:
         if image.mode == "RGB":
             return image
+
         if image.mode != "RGBA":
             image = image.convert("RGBA")
+
         background = Image.new(
             "RGBA",
             image.size,
@@ -196,12 +232,63 @@ class ImageLoader:
         return Image.alpha_composite(background, image).convert("RGB")
 
 
-def list_images(directory: Path) -> list[Path]:
-    try:
-        entries = [
-            p for p in directory.iterdir()
-            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
-        ]
-    except OSError:
+def list_images(
+    directory: Path,
+    *,
+    recursive: bool = True,
+    on_event: Callable[[ScanEvent], None] | None = None,
+) -> list[Path]:
+    directory = directory.expanduser().resolve()
+    if not directory.is_dir():
         return []
-    return sorted(entries, key=lambda p: p.name.casefold())
+
+    found: list[Path] = []
+
+    def report(progress: float, message: str) -> None:
+        if on_event:
+            on_event(
+                ScanEvent(
+                    max(0.0, min(1.0, progress)),
+                    message,
+                    len(found),
+                )
+            )
+
+    if not recursive:
+        try:
+            candidates = sorted(directory.iterdir(), key=lambda p: p.name.casefold())
+        except OSError:
+            return []
+
+        total = max(1, len(candidates))
+        for i, path in enumerate(candidates, 1):
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
+                found.append(path)
+            report(i / total, f"Scanning: {path.name}")
+
+        return sorted(found, key=lambda p: str(p.relative_to(directory)).casefold())
+
+    # Walk without following symlinks so a linked directory cannot create a loop.
+    import os
+
+    root_text = str(directory)
+    dirs_seen = 0
+    for root, dirs, files in os.walk(root_text, topdown=True, followlinks=False):
+        dirs[:] = [
+            d for d in dirs
+            if d not in IGNORED_DIRS and not d.startswith(".")
+        ]
+        dirs_seen += 1
+
+        for name in files:
+            path = Path(root) / name
+            if path.suffix.lower() in IMAGE_EXTENSIONS:
+                found.append(path)
+
+        relative = Path(root).relative_to(directory)
+        label = "." if str(relative) == "." else str(relative)
+        report(min(0.98, dirs_seen / max(dirs_seen + len(dirs) + 1, 1)), f"Scanning: {label}")
+
+    found.sort(key=lambda p: str(p.relative_to(directory)).casefold())
+    report(1.0, f"Found {len(found)} image(s)")
+    return found
