@@ -64,7 +64,17 @@ class CoreTests(unittest.TestCase):
         config.color_depth = ColorDepth.ANSI256
         renderer = Renderer(config)
         self.assertEqual(renderer.main_menu_hit(40, 7, 80, 24), 0)
+        self.assertEqual(renderer.main_menu_hit(40, 8, 80, 24), 0)
+        self.assertEqual(renderer.main_menu_hit(40, 10, 80, 24), 1)
         self.assertEqual(renderer.viewer_hit(20, 20, 80, 24), None)
+        self.assertEqual(renderer.viewer_hit(40, 21, 80, 24), "browse")
+
+    def test_small_terminal_menu_geometry(self) -> None:
+        from imagerpi.renderer import Renderer
+
+        left, title_row, first_row, width, height, gap = Renderer._main_menu_geometry(80, 12)
+        self.assertEqual((title_row, first_row, height, gap), (1, 5, 2, 0))
+        self.assertLessEqual(first_row + 2 * (height + gap) + height - 1, 10)
 
     def test_touch_hit_regions_follow_visible_rows(self) -> None:
         from imagerpi.config import ColorDepth
