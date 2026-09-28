@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imagerpi"
+version = "0.1.0"
+description = "Terminal-native image viewer for Raspberry Pi and Linux"
+requires-python = ">=3.11"
+dependencies = ["Pillow>=11.1,<12"]
+
+[project.scripts]
+imagerpi = "imagerpi.__main__:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
