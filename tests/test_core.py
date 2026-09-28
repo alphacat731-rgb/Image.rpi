@@ -152,6 +152,61 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(renderer.browser_hit(40, 5, 80, 24, 5, 0), 0)
         self.assertEqual(renderer.browser_hit(40, 22, 80, 24, 5, 0), -1)
 
+    def test_small_ui_frames_render_without_overlap_crashes(self) -> None:
+        from imagerpi.renderer import Renderer
+
+        renderer = Renderer(AppConfig())
+
+        main = renderer.main_menu(80, 12, 0, image_count=3)
+        self.assertTrue(main)
+
+        options = renderer.options_menu(
+            80,
+            16,
+            0,
+            quality=Quality.ULTRA,
+            display_mode=DisplayMode.FULL_BLOCK,
+            palette=Palette.LIGHT,
+            recursive_scan=True,
+            touch_controls=True,
+            language=__import__("imagerpi.config", fromlist=["Language"]).Language.ENGLISH,
+            color_depth=ColorDepth.AUTO,
+            terminal_font="",
+            image_count=3,
+        )
+        self.assertTrue(options)
+
+        browser = renderer.browser(80, 12, [], 0)
+        self.assertTrue(browser)
+
+    def test_zoomed_viewer_frame_renders(self) -> None:
+        from pathlib import Path
+        from imagerpi.renderer import Renderer
+        from imagerpi.loader import LoadedImage
+
+        renderer = Renderer(AppConfig())
+        image = Image.new("RGB", (320, 180), (30, 120, 220))
+        loaded = LoadedImage(
+            path=Path("demo.png"),
+            image=image,
+            original_size=(1920, 1080),
+            mode="RGB",
+            file_bytes=123456,
+            source_size=image.size,
+        )
+        frame = renderer.frame(
+            loaded,
+            Quality.ULTRA,
+            "",
+            display_mode=DisplayMode.FULL_BLOCK,
+            browser_index=0,
+            image_count=1,
+            zoom=8.0,
+            pan_x=1.0,
+            pan_y=-1.0,
+        )
+        self.assertTrue(frame)
+
     def test_all_display_modes_render(self) -> None:
         from io import StringIO
         from imagerpi.renderer import Renderer
